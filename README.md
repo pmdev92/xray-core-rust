@@ -3,17 +3,17 @@
 Implementation of the xray-core and sing-box cores in the Rust programming language, optimized for operating systems
 such as iOS, Android, and more.
 
+## Feature Status Legend
+
+✅ **Implemented** | ❌ **Not Implemented** | 🚧 **Partial/In Progress**
+
 ## Config
 
-**Coming Soon** 🚀
+[🚧 Config Documentation](https://pmdev92.github.io/)
 
 ## Build And Run
 
 **Coming Soon** 🚀
-
-## Feature Status Legend
-
-✅ **Implemented** | ❌ **Not Implemented** | 🚧 **Partial/In Progress**
 
 ## Inbound Protocols
 
@@ -99,6 +99,7 @@ such as iOS, Android, and more.
 
 ## Roadmap
 
+- Write Tests
 - TUN Inbound
 - DNS Routing
 - Enhanced Statistics
