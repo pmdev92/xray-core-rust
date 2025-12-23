@@ -3,17 +3,35 @@
 Implementation of the xray-core and sing-box cores in the Rust programming language, optimized for operating systems
 such as iOS, Android, and more.
 
-## Config
-
-**Coming Soon** 🚀
-
-## Build And Run
-
-**Coming Soon** 🚀
-
 ## Feature Status Legend
 
 ✅ **Implemented** | ❌ **Not Implemented** | 🚧 **Partial/In Progress**
+
+## Config
+
+[🚧 Config Documentation](https://pmdev92.github.io/)
+
+## Build And Run
+
+Clone Project:
+
+```sh
+git clone https://github.com/pmdev92/xray-core-rust.git
+cd xray-core-rust
+```
+
+Run development:
+
+```sh
+cargo run run -c CONFIG_PATH
+```
+
+Build and run:
+
+```sh
+cargo build
+./target/debug/xray-core-rust run -c CONFIG_PATH
+```
 
 ## Inbound Protocols
 
@@ -99,6 +117,7 @@ such as iOS, Android, and more.
 
 ## Roadmap
 
+- Write Tests
 - TUN Inbound
 - DNS Routing
 - Enhanced Statistics

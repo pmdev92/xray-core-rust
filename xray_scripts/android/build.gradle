@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.library' version '8.1.1'
+    id 'org.jetbrains.kotlin.android' version '1.9.10'
+}
+repositories {
+    google()
+    mavenCentral()
+}
+android {
+    namespace 'com.xray.core.rust'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 35
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jni']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    libraryVariants.all { variant ->
+         variant.outputs.all { output ->
+            def newName = "core.aar"
+            output.outputFileName = newName
+         }
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+dependencies {
+    implementation "net.java.dev.jna:jna:5.17.0"
+}

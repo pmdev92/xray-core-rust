@@ -1,0 +1,15 @@
+[package]
+name = "xray_ffi_ios"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "xray_ffi_ios"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+xray_lib = { path = "../xray_lib" }
+log = { version = "0.4.29", features = ["std"] }
+chrono = "0.4.40"
+crashreport = "1.0.1"
+lazy_static = "1.5.0"

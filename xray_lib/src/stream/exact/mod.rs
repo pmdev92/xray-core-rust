@@ -1,0 +1,104 @@
+use bytes::{Buf, BytesMut};
+use std::io;
+use std::io::ErrorKind;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{ready, Context, Poll};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+use crate::common::net_location::NetLocation;
+use crate::core::io::AsyncXrayTcpStream;
+
+pub struct ExactWriteStream {
+    stream: Box<dyn AsyncXrayTcpStream>,
+    read_zero: bool,
+    write_buffer: BytesMut,
+}
+
+impl ExactWriteStream {
+    pub async fn new(
+        context: Arc<crate::core::context::Context>,
+        detour: Option<String>,
+        server_net_location: Arc<NetLocation>,
+    ) -> Result<Box<dyn AsyncXrayTcpStream + Send + Sync>, io::Error> {
+        let stream = context.dial_tcp(detour, server_net_location).await?;
+        Ok(Box::new(Self {
+            stream,
+            read_zero: false,
+            write_buffer: Default::default(),
+        }))
+    }
+}
+
+impl AsyncRead for ExactWriteStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let result = ready!(Pin::new(&mut self.stream).poll_read(cx, buf));
+        match result {
+            Ok(_) => {
+                let len = buf.filled().len();
+                if len == 0 {
+                    if self.read_zero {
+                        return Poll::Ready(Err(io::Error::new(
+                            ErrorKind::BrokenPipe,
+                            "read exact bytes",
+                        )));
+                    }
+                    self.read_zero = true;
+                } else {
+                    self.read_zero = false;
+                }
+                Poll::Ready(Ok(()))
+            }
+            Err(err) => Poll::Ready(Err(err)),
+        }
+    }
+}
+
+impl AsyncWrite for ExactWriteStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        let this = self.get_mut();
+
+        if this.write_buffer.is_empty() {
+            this.write_buffer.extend_from_slice(buf);
+        }
+        while !this.write_buffer.is_empty() {
+            let mut inner = Pin::new(&mut this.stream);
+            let result = ready!(inner.as_mut().poll_write(cx, &this.write_buffer));
+            return match result {
+                Ok(size) => {
+                    if size == 0 {
+                        return Poll::Ready(Err(io::Error::new(
+                            ErrorKind::WriteZero,
+                            "failed to write",
+                        )));
+                    }
+                    this.write_buffer.advance(size);
+                    continue;
+                }
+                Err(error) => Poll::Ready(Err(error)),
+            };
+        }
+        this.write_buffer.clear();
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.stream).poll_shutdown(cx)
+    }
+}
+impl AsyncXrayTcpStream for ExactWriteStream {}

@@ -18,4 +18,12 @@ target
 build
 examples
 docs
+
+
+/build
+/docs
+/target
+/.idea/**
+.idea/workspace.xml
 config.json
+*.dat

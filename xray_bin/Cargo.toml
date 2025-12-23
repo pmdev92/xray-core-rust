@@ -1,0 +1,20 @@
+[package]
+name = "xray_bin"
+version = { workspace = true }
+edition = { workspace = true }
+
+[[bin]]
+name = "xray_bin"
+path = "src/main.rs"
+
+[dependencies]
+xray_lib = { path = "../xray_lib" }
+ctrlc = "3.4.5"
+clap = "4.5.32"
+chrono = "0.4.33"
+colored = { version = "3.0.0", features = [] }
+crashreport = "1.0.1"
+log = { version = "0.4.29", features = ["std"] }
+
+
+

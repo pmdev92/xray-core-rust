@@ -1,0 +1,14 @@
+namespace xray {
+void start_xray_logger(boolean is_all_packages, AndroidLogger logger);
+void start_xray_core(u32 id, string path, ProtectFd protector);
+void shutdown_xray_core(u32 id);
+};
+
+
+callback interface ProtectFd {
+boolean protect(u64 id);
+};
+
+callback interface AndroidLogger {
+void log(string message);
+};

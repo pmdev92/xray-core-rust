@@ -1,0 +1,323 @@
+name: Xray-core-rust
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build-linux-windows:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update 
+          sudo apt install llvm-dev libclang-dev clang pkg-config libssl-dev protobuf-compiler make build-essential -y
+
+      - name: Install Cross
+        run: |
+          cargo install cross
+
+      - name: Build
+        run: |
+          export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
+          export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
+          cross build --release --target ${{ matrix.target }} -p xray_bin
+
+      - name: rename and compress artifacts
+        if: ${{ contains(matrix.target, 'windows') }}
+        run: |
+          mv target/${{ matrix.target }}/release/xray_bin.exe xray_bin-${{ matrix.target }}.exe
+
+      - name: rename and compress artifacts
+        if: ${{ !contains(matrix.target, 'windows') }}
+        run: |
+          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
+
+      - name: upload assets
+        if: ${{ contains(matrix.target, 'windows') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}.exe
+          path: xray_bin-${{ matrix.target }}.exe
+
+      - name: upload assets
+        if: ${{ !contains(matrix.target, 'windows') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}
+          path: xray_bin-${{ matrix.target }}
+
+  build-macos:
+    runs-on: [ macos-latest ]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dependencies
+        run: |
+          brew install llvm protobuf
+
+      - name: Add Target
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Build Rust
+        run: |
+          export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
+          export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
+          cargo build --release --target ${{ matrix.target }} -p xray_bin
+
+      - name: Rename Binary
+        run: |
+          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
+
+      - name: Upload Assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}
+          path: xray_bin-${{ matrix.target }}
+
+  build-lib-apple:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dependencies
+        run: |
+          cargo install cbindgen
+          brew install llvm unzip protobuf
+
+      - name: Build Apple
+        run: |
+          ./xray_scripts/build_apple.sh
+
+      - name: Zip Artifacts
+        run: |
+          mv build/LibXrayCoreRust.xcframework .
+          zip -r LibXrayCoreRust.xcframework.zip LibXrayCoreRust.xcframework
+
+      - name: Upload Assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibXrayCoreRust.xcframework.zip
+          path: LibXrayCoreRust.xcframework.zip
+
+  build-lib-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Dependencies
+        run: |
+          cargo install cbindgen
+          apt update && apt install -y make llvm-dev libclang-dev clang pkg-config unzip curl default-jdk build-essential libssl-dev
+          export ANDROID_HOME=/tmp/Android/sdk
+          export NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
+          export PATH=$ANDROID_HOME/cmdline-tools/bin:$PATH
+          cd /tmp/
+          curl -OL https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip
+          unzip commandlinetools-linux-6858069_latest.zip
+          mkdir -p $ANDROID_HOME
+          mv cmdline-tools $ANDROID_HOME
+          yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
+          sdkmanager --sdk_root=$ANDROID_HOME "ndk;28.2.13676358" "platforms;android-21"
+
+      - name: Build Android
+        run: |
+          export ANDROID_HOME=/tmp/Android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          export ANDROID_NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
+          export ANDROID_NDK=/tmp/Android/sdk/ndk/28.2.13676358
+          export OPENSSL_DIR=$(pkg-config --variable=prefix openssl)
+          ./xray_scripts/build_android.sh all
+
+      - name: Zip Artifacts
+        run: |
+          mv build/LibXrayCoreRust.aar .
+          zip -r LibXrayCoreRust.aar.zip LibXrayCoreRust.aar
+
+      - name: Upload Assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibXrayCoreRust.aar.zip
+          path: LibXrayCoreRust.aar.zip
+
+  create-release:
+    needs: [ build-macos , build-linux-windows , build-lib-apple , build-lib-android ]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Create Upload Url File
+        run: |
+          echo -n "${{ steps.create_release.outputs.upload_url }}" > upload_url.txt
+
+      - name: Persist Upload Url File
+        uses: actions/upload-artifact@v4
+        with:
+          name: upload_url.txt
+          path: ./upload_url.txt
+
+  release-cli:
+    needs: [ create-release ]
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+
+    steps:
+      - name: Download Upload Url File
+        uses: actions/download-artifact@v4
+        with:
+          name: upload_url.txt
+
+      - name: Get Upload Url File
+        run: |
+          upload_url=`cat upload_url.txt`
+          echo "uploadurl=$upload_url" >> $GITHUB_ENV
+
+      - name: Download Asset
+        if: ${{ !contains(matrix.target, 'windows') }}
+        uses: actions/download-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}
+
+      - name: Download Asset
+        if: ${{ contains(matrix.target, 'windows') }}
+        uses: actions/download-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}.exe
+
+      - name: Zip Artifacts
+        if: ${{ !contains(matrix.target, 'windows') }}
+        run: |
+          gzip xray_bin-${{ matrix.target }}
+
+      - name: Zip Artifacts
+        if: ${{ contains(matrix.target, 'windows') }}
+        run: |
+          zip -9 xray_bin-${{ matrix.target }}.zip xray_bin-${{ matrix.target }}.exe
+
+      - name: Upload Asset
+        if: ${{ !contains(matrix.target, 'windows') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ env.uploadurl }}
+          asset_path: ./xray_bin-${{ matrix.target }}.gz
+          asset_name: xray_bin-${{ matrix.target }}.gz
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset
+        if: ${{ contains(matrix.target, 'windows') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ env.uploadurl }}
+          asset_path: ./xray_bin-${{ matrix.target }}.zip
+          asset_name: xray_bin-${{ matrix.target }}.zip
+          asset_content_type: application/octet-stream
+
+  release-mobile-libs:
+    needs: [ create-release ]
+    runs-on: macos-latest
+    steps:
+      - name: Download Upload Url File
+        uses: actions/download-artifact@v4
+        with:
+          name: upload_url.txt
+
+      - name: Get Upload Url File
+        run: |
+          upload_url=`cat upload_url.txt`
+          echo "uploadurl=$upload_url" >> $GITHUB_ENV
+
+      - name: Download Asset Apple
+        uses: actions/download-artifact@v4
+        with:
+          name: LibXrayCoreRust.xcframework.zip
+
+      - name: Download Asset Android
+        uses: actions/download-artifact@v4
+        with:
+          name: LibXrayCoreRust.aar.zip
+
+      - name: Upload Asset Apple
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ env.uploadurl }}
+          asset_path: ./LibXrayCoreRust.xcframework.zip
+          asset_name: LibXrayCoreRust.xcframework.zip
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset Android
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ env.uploadurl }}
+          asset_path: ./LibXrayCoreRust.aar.zip
+          asset_name: LibXrayCoreRust.aar.zip
+          asset_content_type: application/octet-stream

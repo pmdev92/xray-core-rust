@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "xray_lib",
+    "xray_bin",
+    "xray_ffi_ios",
+    "xray_ffi_android",
+]
+default-members = ["xray_bin"]
+resolver = "2"
+
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+strip = "symbols"
+
+[profile.dev]
+opt-level = 0
+debug = true
+

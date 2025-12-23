@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message VlessAddons {
+  string Flow = 1;
+  bytes Seed = 2;
+}
