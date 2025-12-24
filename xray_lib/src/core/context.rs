@@ -99,7 +99,6 @@ impl Context {
             SocketAddr::V4(_) => TcpSocket::new_v4()?,
             SocketAddr::V6(_) => TcpSocket::new_v6()?,
         };
-
         #[cfg(target_os = "android")]
         {
             let fd = socket.as_raw_fd();

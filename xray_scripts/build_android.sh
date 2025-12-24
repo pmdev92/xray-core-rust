@@ -52,7 +52,7 @@ cargo run -p $CRATE_NAME --bin uniffi-bindgen generate --lib-file ./build/androi
 
 ./build/android/gradle/gradle-8.14.3/bin/gradle -p ./build/android clean assembleRelease
 mv ./build/android/build/outputs/aar/core.aar ./build/LibXrayCoreRust.aar
-rm -rf ./build/android
+#rm -rf ./build/android
 
 
 
