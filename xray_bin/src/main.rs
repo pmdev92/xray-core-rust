@@ -4,7 +4,6 @@ use crate::logger::LoggerType;
 use clap::{Arg, ArgMatches, Command};
 use std::fs::read_to_string;
 use xray_lib::ContextPlatform;
-// mod parse;
 
 const DEFAULT_CONFIG_PATH: &str = "config.json";
 
@@ -62,6 +61,7 @@ fn command_run(matches: &ArgMatches) {
 
 fn run(config_path: String, is_verbose: bool) {
     let config = read_to_string(&config_path);
+
     match config {
         Ok(config) => {
             run_config(config, is_verbose);
@@ -77,6 +77,7 @@ fn run_config(config: String, is_verbose: bool) {
         xray_lib::shutdown(1);
     })
     .unwrap();
+
     match is_verbose {
         true => {
             logger::init(LoggerType::VERBOSE);

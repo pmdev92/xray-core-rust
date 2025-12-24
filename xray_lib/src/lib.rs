@@ -55,7 +55,6 @@ pub fn start(id: u32, config_json: String, platform: Option<Box<dyn ContextPlatf
             return false;
         }
     };
-
     let context = create_context(&config, platform);
     let context = match context {
         None => {

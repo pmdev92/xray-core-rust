@@ -10,6 +10,7 @@ pub fn start_xray_logger(is_all_packages: bool, logger: Box<dyn AndroidLogger>) 
         is_all_packages,
         packages: vec!["xray_bin".to_string(), "xray_lib".to_string(),"xray_ffi_android".to_string()],
     };
+    log::set_max_level(log::LevelFilter::Warn);
     if let Err(err) = log::set_boxed_logger(Box::new(dumper)) {
         log::debug!("set logger error: {err}");
     }

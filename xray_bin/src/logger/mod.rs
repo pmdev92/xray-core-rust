@@ -15,6 +15,7 @@ pub fn init(logger_type: LoggerType) {
             ConsoleLogger::new_with(vec!["xray_bin".to_string(), "xray_lib".to_string()])
         }
     };
+    log::set_max_level(log::LevelFilter::Warn);
     if let Err(err) = log::set_boxed_logger(Box::new(logger)) {
         println!("set logger error: {err}");
     } else {
