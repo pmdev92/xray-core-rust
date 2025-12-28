@@ -31,7 +31,7 @@ use crate::security::reality::RealitySecurity;
 use crate::security::tls::TlsSecurity;
 use crate::transport::grpc::GrpcTransport;
 use crate::transport::http2::Http2Transport;
-use crate::transport::http_hpgrade::HttpUpgradeTransport;
+use crate::transport::http_upgrade::HttpUpgradeTransport;
 use crate::transport::tcp::TcpTransport;
 use crate::transport::websocket::WebsocketTransport;
 use crate::transport::xhttp::XHttpTransport;
@@ -188,7 +188,7 @@ impl Config {
                         "xhttp" => {
                             transport = Some(Box::new(XHttpTransport::new(
                                 outbound_config.stream_settings.clone(),
-                                stream_setting.x_http_settings.clone(),
+                                stream_setting.xhttp_settings.clone(),
                                 security_setting,
                             )));
                         }
@@ -199,10 +199,10 @@ impl Config {
                                 security_setting,
                             )));
                         }
-                        "http_upgrade" => {
+                        "httpupgrade" => {
                             transport = Some(Box::new(HttpUpgradeTransport::new(
                                 outbound_config.stream_settings.clone(),
-                                stream_setting.http_upgrade_settings.clone(),
+                                stream_setting.httpupgrade_settings.clone(),
                                 security_setting,
                             )));
                         }
@@ -245,46 +245,7 @@ impl Config {
                         Box::new(Arc::new(TuicQuinnOutbound::new(tuic_setting)?));
                     outbound
                 }
-                "quinn_tuic" => {
-                    let Some(setting) = &outbound_config.settings else {
-                        let error = io::Error::new(
-                            ErrorKind::InvalidData,
-                            "tuic outbound must have setting".to_string(),
-                        );
-                        return Err(error);
-                    };
-                    let result: io::Result<TuicQuinnSettings> = serde_json::from_str(setting.get())
-                        .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()));
-
-                    let Ok(tuic_setting) = result else {
-                        return Err(result.err().unwrap());
-                    };
-
-                    let outbound: Box<Arc<dyn Outbound>> =
-                        Box::new(Arc::new(TuicQuinnOutbound::new(tuic_setting)?));
-                    outbound
-                }
                 "hysteria2" => {
-                    let Some(setting) = &outbound_config.settings else {
-                        let error = io::Error::new(
-                            ErrorKind::InvalidData,
-                            "hysteria2 outbound must have setting".to_string(),
-                        );
-                        return Err(error);
-                    };
-                    let result: io::Result<HysteriaQuinnSettings> =
-                        serde_json::from_str(setting.get())
-                            .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()));
-
-                    let Ok(hysteria2_setting) = result else {
-                        return Err(result.err().unwrap());
-                    };
-
-                    let outbound: Box<Arc<dyn Outbound>> =
-                        Box::new(Arc::new(HysteriaQuinnOutbound::new(hysteria2_setting)));
-                    outbound
-                }
-                "quinn_hysteria2" => {
                     let Some(setting) = &outbound_config.settings else {
                         let error = io::Error::new(
                             ErrorKind::InvalidData,

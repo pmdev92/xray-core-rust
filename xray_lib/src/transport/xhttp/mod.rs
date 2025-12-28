@@ -69,12 +69,12 @@ pub struct XHttpTransport {
 impl XHttpTransport {
     pub fn new(
         stream_settings: Option<StreamSettings>,
-        x_http_config: Option<XHttpConfig>,
+        xhttp_config: Option<XHttpConfig>,
         security: Option<Box<dyn Security>>,
     ) -> Self {
         let stream_settings = Arc::new(stream_settings);
         let security = Arc::new(security);
-        match x_http_config {
+        match xhttp_config {
             None => {
                 let inner = XHttpTransportInner {
                     stream_settings: stream_settings.clone(),
@@ -95,9 +95,9 @@ impl XHttpTransport {
                     security: security.clone(),
                 }
             }
-            Some(x_http_config) => {
+            Some(xhttp_config) => {
                 let mut qeury = None;
-                let path = x_http_config.path.unwrap_or("/".to_string());
+                let path = xhttp_config.path.unwrap_or("/".to_string());
                 let (path, query_string) = match path.split_once('?') {
                     Some((p, q)) => (p.to_string(), Some(q.to_string())),
                     None => (path, None),
@@ -113,21 +113,21 @@ impl XHttpTransport {
                 let inner = XHttpTransportInner {
                     stream_settings: stream_settings.clone(),
                     security: security.clone(),
-                    headers: x_http_config.headers.clone(),
+                    headers: xhttp_config.headers.clone(),
                     query: qeury,
                     x_padding_bytes: RangeInclusive::new(
-                        x_http_config.x_padding_bytes_min.unwrap_or(100),
-                        x_http_config.x_padding_bytes_min.unwrap_or(1000),
+                        xhttp_config.x_padding_bytes_min.unwrap_or(100),
+                        xhttp_config.x_padding_bytes_min.unwrap_or(1000),
                     ),
-                    no_grpc_header: x_http_config.no_grpc_header.clone(),
-                    packet_up_interval_ms: x_http_config.packet_up_interval_ms,
+                    no_grpc_header: xhttp_config.no_grpc_header.clone(),
+                    packet_up_interval_ms: xhttp_config.packet_up_interval_ms,
                     sender: Mutex::new(None),
                 };
                 XHttpTransport {
                     inner: Arc::new(inner),
-                    host: x_http_config.host.clone(),
+                    host: xhttp_config.host.clone(),
                     path: Some(path),
-                    mode: x_http_config.mode.clone(),
+                    mode: xhttp_config.mode.clone(),
                     stream_settings: stream_settings.clone(),
                     security: security.clone(),
                 }

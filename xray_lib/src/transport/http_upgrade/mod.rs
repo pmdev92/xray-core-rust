@@ -12,7 +12,7 @@ use crate::core::security::Security;
 use crate::core::stream::StreamSettings;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::stream::get_stream;
-use crate::transport::http_hpgrade::config::HttpUpgradeConfig;
+use crate::transport::http_upgrade::config::HttpUpgradeConfig;
 use async_trait::async_trait;
 use http::{HeaderName, HeaderValue};
 use tls_parser::nom::AsBytes;
@@ -32,21 +32,21 @@ pub struct HttpUpgradeTransport {
 impl HttpUpgradeTransport {
     pub fn new(
         stream_settings: Option<StreamSettings>,
-        http_upgrade_config: Option<HttpUpgradeConfig>,
+        httpupgrade_config: Option<HttpUpgradeConfig>,
         security: Option<Box<dyn Security>>,
     ) -> Self {
-        match http_upgrade_config {
+        match httpupgrade_config {
             None => Self {
                 stream_settings,
                 security,
                 host: None,
                 path: None,
             },
-            Some(http_upgrade_config) => Self {
+            Some(httpupgrade_config) => Self {
                 stream_settings,
                 security,
-                host: http_upgrade_config.host.clone(),
-                path: http_upgrade_config.path.clone(),
+                host: httpupgrade_config.host.clone(),
+                path: httpupgrade_config.path.clone(),
             },
         }
     }
@@ -113,7 +113,7 @@ impl Transport for HttpUpgradeTransport {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
                 format!(
-                    "http_upgrade unexpected response status code: {}",
+                    "httpupgrade unexpected response status code: {}",
                     status_code
                 ),
             ));
@@ -147,7 +147,7 @@ impl Transport for HttpUpgradeTransport {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
                 format!(
-                    "http_upgrade unexpected headers `connection: {} upgrade: {}`",
+                    "httpupgrade unexpected headers `connection: {} upgrade: {}`",
                     connection, upgrade
                 ),
             ));

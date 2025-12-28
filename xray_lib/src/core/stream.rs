@@ -5,7 +5,7 @@ use crate::security::tls::config::TlsConfig;
 use crate::stream::fragment::config::FragmentConfig;
 use crate::transport::grpc::config::GrpcConfig;
 use crate::transport::http2::config::HttpConfig;
-use crate::transport::http_hpgrade::config::HttpUpgradeConfig;
+use crate::transport::http_upgrade::config::HttpUpgradeConfig;
 use crate::transport::tcp::config::TcpConfig;
 use crate::transport::websocket::config::WebsocketConfig;
 use crate::transport::xhttp::config::XHttpConfig;
@@ -17,9 +17,9 @@ pub struct StreamSettings {
     pub tls_settings: Option<TlsConfig>,
     pub reality_settings: Option<RealityConfig>,
     pub tcp_settings: Option<TcpConfig>,
-    pub http_upgrade_settings: Option<HttpUpgradeConfig>,
+    pub httpupgrade_settings: Option<HttpUpgradeConfig>,
     pub ws_settings: Option<WebsocketConfig>,
-    pub x_http_settings: Option<XHttpConfig>,
+    pub xhttp_settings: Option<XHttpConfig>,
     pub http_settings: Option<HttpConfig>,
     pub grpc_settings: Option<GrpcConfig>,
     pub fragment_settings: Option<FragmentConfig>,
@@ -34,10 +34,10 @@ impl StreamSettings {
             reality_settings: None,
             tcp_settings: None,
             ws_settings: None,
-            x_http_settings: None,
+            xhttp_settings: None,
             http_settings: None,
             grpc_settings: None,
-            http_upgrade_settings: None,
+            httpupgrade_settings: None,
             fragment_settings: None,
         }
     }
