@@ -119,28 +119,28 @@ impl Outbound for Socks5Outbound {
                 format!("socks 5 reserved not match: {}", data[2]),
             ));
         }
-        let socks5_server_address = read_target_location(&mut transport).await?;
-        if socks5_server_address.port != server_location.port {
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "mismatch socks5 server port: {} {}",
-                    socks5_server_address.port, server_location.port
-                ),
-            ));
-        }
-        if !server_location.address.is_hostname() {
-            if socks5_server_address.address != server_location.address {
-                return Err(io::Error::new(
-                    ErrorKind::InvalidInput,
-                    format!(
-                        "mismatch socks5 server address: {} {}",
-                        server_location.address.to_string(),
-                        socks5_server_address.address.to_string()
-                    ),
-                ));
-            }
-        }
+        let _ = read_target_location(&mut transport).await?;
+        // if socks5_server_address.port != server_location.port {
+        //     return Err(io::Error::new(
+        //         ErrorKind::InvalidInput,
+        //         format!(
+        //             "mismatch socks5 server port: {} {}",
+        //             socks5_server_address.port, server_location.port
+        //         ),
+        //     ));
+        // }
+        // if !server_location.address.is_hostname() {
+        //     if socks5_server_address.address != server_location.address {
+        //         return Err(io::Error::new(
+        //             ErrorKind::InvalidInput,
+        //             format!(
+        //                 "mismatch socks5 server address: {} {}",
+        //                 server_location.address.to_string(),
+        //                 socks5_server_address.address.to_string()
+        //             ),
+        //         ));
+        //     }
+        // }
 
         Ok(Box::new(Socks5TcpStream::new(transport)))
     }
@@ -164,7 +164,7 @@ impl Outbound for Socks5Outbound {
         let mut data = [0u8; 2];
         transport.read_exact(&mut data).await?;
         if data[0] != SOCKS_VERSION {
-            warn!("unsupported socks 5 version:  {}", data[0]);
+            warn!("unsupported socks 5 version: {}", data[0]);
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("unsupported socks 5 version: {}", data[0]),

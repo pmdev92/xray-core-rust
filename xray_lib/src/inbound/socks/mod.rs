@@ -161,6 +161,12 @@ impl Socks5Inbound {
                     "socks 5 connect command local address is invalid",
                 ));
             };
+
+            let local_address = match local_address {
+                SocketAddr::V6(v6) => SocketAddr::new(v6.ip().to_canonical(), v6.port()),
+                v4 => v4,
+            };
+
             let Ok(address) = Address::from(&local_address.ip().to_string()) else {
                 return Err(io::Error::new(
                     ErrorKind::InvalidData,
@@ -224,6 +230,10 @@ impl Socks5Inbound {
         }
         if command == protocol::socks_command::UDP_ASSOSIATE {
             let local_address = tcp_stream.local_addr()?;
+            let local_address = match local_address {
+                SocketAddr::V6(v6) => SocketAddr::new(v6.ip().to_canonical(), v6.port()),
+                v4 => v4,
+            };
             let port = get_udp_open_port(&local_address.ip().to_string())
                 .await
                 .ok_or(io::Error::from(ErrorKind::InvalidInput))?;

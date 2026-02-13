@@ -15,7 +15,7 @@ use log::trace;
 use prost::encoding::{decode_varint, encode_varint};
 use tls_parser::nom::AsBytes;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
-
+use tokio::sync::Mutex;
 use crate::common::net_location::NetLocation;
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::{Security, XraySecurity};
@@ -30,6 +30,7 @@ pub struct GrpcTransport {
     security: Option<Box<dyn Security>>,
     service_name: Option<String>,
     stream_settings: Option<StreamSettings>,
+    client: Arc<Mutex<Option<h2::client::SendRequest<Bytes>>>>,
 }
 
 impl GrpcTransport {
@@ -46,6 +47,7 @@ impl GrpcTransport {
                 stream_settings,
                 security,
                 service_name: grpc_config.service_name.clone(),
+                client: Arc::new(Default::default()),
             },
         }
     }
@@ -101,9 +103,26 @@ impl Transport for GrpcTransport {
         trace!("grpc transport path is {}", path);
         match &self.security {
             None => {
-                let (mut client, h2) = client::handshake(connection)
-                    .await
-                    .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                let mut client = {
+                    let client_clone = self.client.clone();
+                    let mut result = client_clone.lock().await;
+                    let client = match result.as_ref() {
+                        Some(client) => client.clone(),
+                        None => {
+                            let (mut client, h2) = client::handshake(connection)
+                                .await
+                                .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                            let clone = self.client.clone();
+                            *result = Some(client.clone());
+                            tokio::spawn(async move {
+                                let _ = h2.await;
+                                *clone.lock().await = None;
+                            });
+                            client
+                        }
+                    };
+                    client
+                };
                 let uri = Uri::builder()
                     .scheme("http")
                     .authority(host)
@@ -124,9 +143,7 @@ impl Transport for GrpcTransport {
                     .send_request(request, false)
                     .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
 
-                tokio::spawn(async move {
-                    let _ = h2.await;
-                });
+
                 let http2_stream = GrpcStream {
                     response,
                     receiver: None,
@@ -138,11 +155,28 @@ impl Transport for GrpcTransport {
                 Ok(Box::new(http2_stream))
             }
             Some(security) => {
-                security.add_alpn("h2".to_string()).await;
-                let connection = security.dial(connection).await?;
-                let (mut client, h2) = client::handshake(connection)
-                    .await
-                    .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                let mut client = {
+                    let client_clone = self.client.clone();
+                    let mut result = client_clone.lock().await;
+                    let client = match result.as_ref() {
+                        Some(client) => client.clone(),
+                        None => {
+                            security.add_alpn("h2".to_string()).await;
+                            let connection = security.dial(connection).await?;
+                            let (mut client, h2) = client::handshake(connection)
+                                .await
+                                .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                            let clone = self.client.clone();
+                            *result = Some(client.clone());
+                            tokio::spawn(async move {
+                                let _ = h2.await;
+                                *clone.lock().await = None;
+                            });
+                            client
+                        }
+                    };
+                    client
+                };
                 let uri = Uri::builder()
                     .scheme("https")
                     .authority(host)
@@ -162,9 +196,6 @@ impl Transport for GrpcTransport {
                     .send_request(request, false)
                     .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
 
-                tokio::spawn(async move {
-                    let _ = h2.await;
-                });
                 let http2_stream = GrpcStream {
                     response,
                     receiver: None,
