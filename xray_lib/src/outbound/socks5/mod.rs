@@ -9,7 +9,7 @@ use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use crate::core::outbound::Outbound;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::outbound::socks5::config::Socks5Settings;
-use crate::outbound::socks5::protocol::auth_methods::NO_AUTH;
+use crate::outbound::socks5::protocol::auth_methods::{NO_AUTH, NO_METHODS, USER_PASSWORD_AUTH, USER_PASSWORD_AUTH_SUCCESS, USER_PASSWORD_AUTH_VERSION};
 use crate::outbound::socks5::protocol::response_code::SUCCESS;
 use crate::outbound::socks5::protocol::socks_command::{CONNECT, UDP_ASSOSIATE};
 use crate::outbound::socks5::protocol::{RESERVED, SOCKS_VERSION};
@@ -34,6 +34,8 @@ pub struct Socks5Outbound {
     address: String,
     port: u16,
     transport: Box<dyn Transport>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl Socks5Outbound {
@@ -43,14 +45,102 @@ impl Socks5Outbound {
     ) -> Result<Self, io::Error> {
         trace!("socks5 outbound address is {}", socks5_settings.address);
         trace!("socks5 outbound port is {}", socks5_settings.port);
+        trace!(
+            "socks5 outbound username is {}",
+            socks5_settings.username.clone().unwrap_or("".to_string())
+        );
+        trace!(
+            "socks5 outbound password is {}",
+            socks5_settings.password.clone().unwrap_or("".to_string())
+        );
 
         Ok(Self {
             address: socks5_settings.address,
             port: socks5_settings.port,
             transport,
+            username: socks5_settings.username,
+            password: socks5_settings.password,
         })
     }
+
+    async fn auth(&self,
+                  context: Arc<crate::core::context::Context>,
+                  detour: Option<String>,) -> Result<Box<dyn XrayTransport>, io::Error> {
+        let address = Address::from(&self.address)?;
+        let server_location = Arc::new(NetLocation::new(address, self.port));
+        let mut transport = self
+            .transport
+            .dial(context, detour, server_location.clone())
+            .await?;
+
+        let mut methods = vec![];
+
+        if self.username.clone().unwrap_or("".to_string()) != "" {
+            methods.push(USER_PASSWORD_AUTH);
+        } else {
+            methods.push(NO_AUTH);
+        }
+
+        //version auth_methods_count auths
+        let mut data = vec![SOCKS_VERSION, methods.len() as u8];
+        data.extend_from_slice(&methods);
+
+        transport.write_all(&data).await?;
+        //version selected_auth
+        let mut data = [0u8; 2];
+        transport.read_exact(&mut data).await?;
+
+        if data[0] != SOCKS_VERSION {
+            warn!("unsupported socks 5 version: {}", data[0]);
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("unsupported socks 5 version: {}", data[0]),
+            ));
+        }
+        if data[1] == NO_METHODS {
+            warn!("socks 5 auth no acceptable method");
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "socks 5 auth no acceptable method".to_string(),
+            ));
+        }
+
+        if data[1] == USER_PASSWORD_AUTH {
+            let mut user_password_data = vec![USER_PASSWORD_AUTH_VERSION];
+            let username = self.username.clone().unwrap_or("".to_string());
+            let password = self.password.clone().unwrap_or("".to_string());
+            user_password_data.push(username.len() as u8);
+
+            user_password_data.extend_from_slice(username.as_bytes());
+
+            user_password_data.push(password.len() as u8);
+            user_password_data.extend_from_slice(password.as_bytes());
+
+            transport.write_all(&user_password_data).await?;
+
+            let mut data = [0u8; 2];
+            transport.read_exact(&mut data).await?;
+
+            if data[0] != USER_PASSWORD_AUTH_VERSION {
+                warn!("socks5 user pass auth version is invalid : {}", data[0]);
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("socks5 user pass auth version is invalid : {}", data[0]),
+                ));
+            }
+            if data[1] != USER_PASSWORD_AUTH_SUCCESS {
+                warn!("socks5 user pass auth is failed");
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "socks5 user pass auth is failed".to_string(),
+                ));
+            }
+        }
+
+        return Ok(transport);
+    }
 }
+
 
 #[async_trait]
 impl Outbound for Socks5Outbound {
@@ -60,33 +150,10 @@ impl Outbound for Socks5Outbound {
         detour: Option<String>,
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, io::Error> {
-        let address = Address::from(&self.address)?;
-        let server_location = Arc::new(NetLocation::new(address, self.port));
-        let mut transport = self
-            .transport
-            .dial(context, detour, server_location.clone())
-            .await?;
 
-        //version auth_methods_count auths
-        let data = [SOCKS_VERSION, 1, NO_AUTH];
-        transport.write_all(&data).await?;
-        //version selected_auth
-        let mut data = [0u8; 2];
-        transport.read_exact(&mut data).await?;
-        if data[0] != SOCKS_VERSION {
-            warn!("unsupported socks 5 version:  {}", data[0]);
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("unsupported socks 5 version: {}", data[0]),
-            ));
-        }
-        if data[1] != NO_AUTH {
-            warn!("unsupported socks 5 auth:  {}", data[1]);
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("unsupported socks 5 auth: {}", data[1]),
-            ));
-        }
+
+        let mut transport = self.auth(context,detour).await?;
+
         //version method reserved
         let data = [SOCKS_VERSION, CONNECT, RESERVED];
         transport.write_all(&data).await?;
@@ -151,32 +218,9 @@ impl Outbound for Socks5Outbound {
         detour: Option<String>,
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayUdpStream>, io::Error> {
-        let address = Address::from(&self.address)?;
-        let server_location = Arc::new(NetLocation::new(address, self.port));
-        let mut transport = self
-            .transport
-            .dial(context.clone(), detour, server_location.clone())
-            .await?;
-        //version auth_methods_count auths
-        let data = [SOCKS_VERSION, 1, NO_AUTH];
-        transport.write_all(&data).await?;
-        //version selected_auth
-        let mut data = [0u8; 2];
-        transport.read_exact(&mut data).await?;
-        if data[0] != SOCKS_VERSION {
-            warn!("unsupported socks 5 version: {}", data[0]);
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("unsupported socks 5 version: {}", data[0]),
-            ));
-        }
-        if data[1] != NO_AUTH {
-            warn!("unsupported socks 5 auth:  {}", data[1]);
-            return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("unsupported socks 5 auth: {}", data[1]),
-            ));
-        }
+
+        let mut transport = self.auth(context.clone(),detour).await?;
+
         //version method reserved
         let data = [SOCKS_VERSION, UDP_ASSOSIATE, RESERVED];
         transport.write_all(&data).await?;

@@ -4,7 +4,10 @@ pub(crate) const RESERVED: u8 = 0x00;
 
 pub(crate) mod auth_methods {
     pub const NO_AUTH: u8 = 0x00;
+    pub const USER_PASSWORD_AUTH: u8 = 0x02;
     pub const NO_METHODS: u8 = 0xff;
+    pub const USER_PASSWORD_AUTH_VERSION: u8 = 0x01;
+    pub const USER_PASSWORD_AUTH_SUCCESS: u8 = 0x00;
 }
 
 pub(crate) mod response_code {
