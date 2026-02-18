@@ -146,6 +146,7 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
       - name: Install Dependencies
         run: |
           cargo install cbindgen

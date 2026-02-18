@@ -6,8 +6,11 @@ CRATE_NAME="xray_ffi_android"
 rm -rf ./build/android
 mkdir -p ./build/android
 cp -r ./xray_scripts/android ./build/
-unzip ./build/android/gradle.zip -d ./build/android/gradle
-rm -rf ./build/android/gradle.zip
+
+curl -L https://services.gradle.org/distributions/gradle-8.14.3-bin.zip -o gradle.zip
+unzip gradle.zip -d ./build/android/gradle
+#unzip ./build/android/gradle.zip -d ./build/android/gradle
+#rm -rf ./build/android/gradle.zip
 
 if [ -z "$ANDROID_HOME" ]; then
   export ANDROID_HOME="$HOME/Library/Android/sdk"
