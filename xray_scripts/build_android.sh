@@ -1,16 +1,16 @@
 #!/bin/bash
 set -ex
 
+
 CRATE_NAME="xray_ffi_android"
 
-rm -rf ./build/android
 mkdir -p ./build/android
 cp -r ./xray_scripts/android ./build/
 
-curl -L https://services.gradle.org/distributions/gradle-8.14.3-bin.zip -o gradle.zip
-unzip gradle.zip -d ./build/android/gradle
-#unzip ./build/android/gradle.zip -d ./build/android/gradle
-#rm -rf ./build/android/gradle.zip
+mkdir ./build/android/src/main/assets
+curl -sL https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat -o ./build/android/src/main/assets/geoip.dat
+curl -sL https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -o ./build/android/src/main/assets/geosite.dat
+
 
 if [ -z "$ANDROID_HOME" ]; then
   export ANDROID_HOME="$HOME/Library/Android/sdk"
@@ -53,11 +53,5 @@ cargo install cargo-ndk
 cargo ndk $ndk_targets -o ./build/android/src/main/jni build --package $CRATE_NAME --release
 cargo run -p $CRATE_NAME --bin uniffi-bindgen generate --lib-file ./build/android/src/main/jni/arm64-v8a/libxray_ffi_android.so -c ./$CRATE_NAME/uniffi.toml --no-format --language kotlin --out-dir ./build/android/src/main/java ./$CRATE_NAME/src/xray.udl
 
-./build/android/gradle/gradle-8.14.3/bin/gradle -p ./build/android clean assembleRelease
+./build/android/gradlew -p ./build/android clean assembleRelease
 mv ./build/android/build/outputs/aar/core.aar ./build/LibXrayCoreRust.aar
-#rm -rf ./build/android
-
-
-
-#curl -L https://services.gradle.org/distributions/gradle-8.14.3-bin.zip -o gradle.zip
-#unzip gradle.zip -d ./gradle
