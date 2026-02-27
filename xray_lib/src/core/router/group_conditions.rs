@@ -80,10 +80,10 @@ impl GroupConditions {
 
         match &rule.port {
             None => {}
-            Some(port_rules) => {
+            Some(rule) => {
                 group_rules
                     .matchers
-                    .push(Box::new(PortMatcher::new(port_rules)));
+                    .push(Box::new(PortMatcher::new(rule.clone())));
             }
         }
 

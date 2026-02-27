@@ -2,7 +2,7 @@ mod logger;
 
 use crate::logger::AndroidLogger;
 use jni::JavaVM;
-use std::thread;
+use std::{env, thread};
 
 uniffi::include_scaffolding!("xray");
 
@@ -26,6 +26,10 @@ pub extern "system" fn init_xray_rust_core(
     }
 }
 
+
+pub fn init_asset_path(path: String) {
+    env::set_var("XRAY_ASSET_LOCATION", path)
+}
 
 pub fn start_xray_logger(is_all_packages: bool, logger: Box<dyn AndroidLogger>) {
     logger::start_xray_logger(is_all_packages, logger)

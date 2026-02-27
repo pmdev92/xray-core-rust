@@ -6,7 +6,10 @@ mod platform;
 
 use crate::platform::IosPlatform;
 use std::os::raw::c_char;
-use std::{ffi::CStr, thread};
+use std::{env, ffi::CStr, thread};
+pub fn init_asset_path(path: String) {
+    env::set_var("XRAY_ASSET_LOCATION", path)
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn start_xray_core(id: u32, config: *const c_char) {

@@ -13,3 +13,4 @@ pub mod udp;
 pub mod utils;
 pub mod uuid;
 pub mod vec;
+pub mod asset;

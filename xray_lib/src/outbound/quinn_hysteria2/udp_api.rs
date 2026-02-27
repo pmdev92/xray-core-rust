@@ -53,14 +53,14 @@ impl UdpApi {
                     match res {
                         Ok(bytes) => self.clone().received_bytes(bytes).await,
                         Err(e) => {
-                            error!("hysteria2 read datagram error: {}", e);
+                            error!("hysteria2 read datagram error : {}", e);
                             break e;
                         }
                     }
                 }
             }
         };
-        warn!("hysteria2 connection error: {:?}", err);
+        warn!("hysteria2 connection error: {}", err);
     }
 
     pub async fn received_bytes(self: Arc<Self>, bytes: bytes::Bytes) {
@@ -68,7 +68,7 @@ impl UdpApi {
         let pkt = match pkt {
             Ok(pkt) => pkt,
             Err(error) => {
-                warn!("hysteria2 udp packet decode error: {:?}", error);
+                warn!("hysteria2 udp packet decode error: {}", error);
                 return;
             }
         };
@@ -81,7 +81,7 @@ impl UdpApi {
                 }
             }
             _ => {
-                warn!("hysteria2 udp session not found: {}", session_id);
+                warn!("hysteria2 udp session not found : {}", session_id);
             }
         }
     }

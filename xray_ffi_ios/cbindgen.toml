@@ -1,7 +1,7 @@
 language = "C"
 
 [export]
-include = ["start_xray_crash", "start_xray_platform_acceptor", "start_xray_logger", "start_memory", "start_xray_core", "shutdown_xray_core", "get_xray_statistics"]
+include = ["init_asset_path","start_xray_crash", "start_xray_platform_acceptor", "start_xray_logger", "start_memory", "start_xray_core", "shutdown_xray_core", "get_xray_statistics"]
 
 [parse]
 parse_deps = false

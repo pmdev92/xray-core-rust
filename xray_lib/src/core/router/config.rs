@@ -9,7 +9,7 @@ pub struct RouterConfig {
 pub struct RuleConfig {
     pub protocol: Option<Vec<String>>,
     pub network: Option<Vec<String>>,
-    pub port: Option<Vec<u16>>,
+    pub port: Option<String>,
     pub domain: Option<Vec<String>>,
     pub ip: Option<Vec<String>>,
     pub outbound_tag: String,

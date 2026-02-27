@@ -1,3 +1,5 @@
+use std::env;
+use std::path::{Path, PathBuf};
 use crate::core::router::domain::full_domain_matcher::FullDomainMatcher;
 use crate::core::router::domain::geo_domain_matcher::GeoDomainMatcher;
 use crate::core::router::domain::partial_matcher::PartialMatcher;
@@ -5,6 +7,8 @@ use crate::core::router::domain::regular_expression_matcher::RegularExpressionMa
 use crate::core::router::domain::sub_domain_matcher::SubDomainMatcher;
 use crate::core::router::{Apply, RouteLocation};
 use std::sync::Arc;
+use log::warn;
+use crate::common::asset::get_asset_location;
 
 mod full_domain_matcher;
 mod geo_domain_matcher;
@@ -45,14 +49,30 @@ impl DomainMatcher {
         let mut rules: Vec<Box<dyn Apply>> = Vec::new();
         for rule in raw_rules {
             if rule.starts_with("geo:") {
-                let path_code = rule.replace("geo:", "").clone();
-                let path_code = path_code.split(",").collect::<Vec<&str>>();
-                if path_code.len() != 2 {
+                let geo = rule.replace("geo:", "").clone();
+                let geo = geo.split(",").collect::<Vec<&str>>();
+                if geo.len()<1 || geo.len()>2 {
+                    warn!("router rule domain `{}` parse error", rule);
                     continue;
                 }
-                let path = path_code[0];
-                let code = path_code[1];
-                let helper = GeoDomainMatcher::new(path.to_string(), code.to_string());
+                let mut file = "";
+                let mut code = "";
+
+                if geo.len() == 1 {
+                     file = "geosite.dat";
+                     code = geo[0];
+                }else if geo.len() == 2 {
+                     file = geo[0];
+                     code = geo[1];
+                }
+
+                let path = if Path::new(file).is_relative() {
+                    get_asset_location(file).to_string_lossy().into_owned()
+                }else {
+                    file.to_string()
+                };
+
+                let helper = GeoDomainMatcher::new(path, code.to_string());
                 rules.push(Box::new(helper));
             } else if rule.starts_with("regexp:") {
                 let helper = RegularExpressionMatcher::new(rule.replace("regexp:", "").clone());
@@ -76,3 +96,5 @@ impl DomainMatcher {
         Self { matchers: rules }
     }
 }
+
+

@@ -7,7 +7,7 @@ CRATE_NAME="xray_ffi_android"
 mkdir -p ./build/android
 cp -r ./xray_scripts/android ./build/
 
-mkdir ./build/android/src/main/assets
+mkdir -p ./build/android/src/main/assets
 curl -sL https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat -o ./build/android/src/main/assets/geoip.dat
 curl -sL https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -o ./build/android/src/main/assets/geosite.dat
 
