@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install llvm-dev libclang-dev clang pkg-config libssl-dev protobuf-compiler make build-essential zip gzip -y
+          sudo apt install llvm-dev libclang-dev clang pkg-config libssl-dev protobuf-compiler make build-essential zip openssl -y
 
       - name: Install Cross
         run: |
@@ -46,40 +46,51 @@ jobs:
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
           cross build --release --target ${{ matrix.target }} -p xray_bin
 
-      - name: Rename Windows binary
-        if: ${{ contains(matrix.target, 'windows') }}
+      - name: Prepare build assets
         run: |
-          mv target/${{ matrix.target }}/release/xray_bin.exe xray_bin-${{ matrix.target }}.exe
+          mkdir -p build_assets
 
-      - name: Rename Unix binary
-        if: ${{ !contains(matrix.target, 'windows') }}
-        run: |
-          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
+          if [[ "${{ contains(matrix.target, 'windows') }}" == "true" ]]; then
+            cp target/${{ matrix.target }}/release/xray_bin.exe build_assets/xray_bin.exe
+          else
+            cp target/${{ matrix.target }}/release/xray_bin build_assets/xray_bin
+          fi
 
-      - name: Package Windows binary
-        if: ${{ contains(matrix.target, 'windows') }}
+      - name: Create ZIP archive and checksums
+        shell: bash
         run: |
-          zip -9 xray_bin-${{ matrix.target }}.zip xray_bin-${{ matrix.target }}.exe
-          echo "ASSET_FILE=xray_bin-${{ matrix.target }}.zip" >> $GITHUB_ENV
+          pushd build_assets || exit 1
+          touch -mt $(date +%Y01010000) *
+          zip -9vr ../Xray-${{ matrix.target }}.zip .
+          popd || exit 1
 
-      - name: Package Unix binary
-        if: ${{ !contains(matrix.target, 'windows') }}
-        run: |
-          gzip -c xray_bin-${{ matrix.target }} > xray_bin-${{ matrix.target }}.gz
-          echo "ASSET_FILE=xray_bin-${{ matrix.target }}.gz" >> $GITHUB_ENV
+          FILE=./Xray-${{ matrix.target }}.zip
+          DGST=$FILE.dgst
+
+          for METHOD in {"md5","sha1","sha256","sha512"}
+          do
+            openssl dgst -$METHOD $FILE | sed 's/([^)]*)//g' >>$DGST
+          done
+
+          echo "ASSET_ZIP=Xray-${{ matrix.target }}.zip" >> $GITHUB_ENV
+          echo "ASSET_DGST=Xray-${{ matrix.target }}.zip.dgst" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.ASSET_FILE }}
-          path: ${{ env.ASSET_FILE }}
+          name: Xray-${{ matrix.target }}
+          path: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
 
       - name: Upload asset to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: ${{ env.ASSET_FILE }}
+          files: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -117,25 +128,45 @@ jobs:
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
           cargo build --release --target ${{ matrix.target }} -p xray_bin
 
-      - name: Rename binary
+      - name: Prepare build assets
         run: |
-          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
+          mkdir -p build_assets
+          cp target/${{ matrix.target }}/release/xray_bin build_assets/xray_bin
 
-      - name: Package binary
+      - name: Create ZIP archive and checksums
+        shell: bash
         run: |
-          gzip -c xray_bin-${{ matrix.target }} > xray_bin-${{ matrix.target }}.gz
+          pushd build_assets || exit 1
+          touch -mt $(date +%Y01010000) *
+          zip -9vr ../Xray-${{ matrix.target }}.zip .
+          popd || exit 1
+
+          FILE=./Xray-${{ matrix.target }}.zip
+          DGST=$FILE.dgst
+
+          for METHOD in {"md5","sha1","sha256","sha512"}
+          do
+            openssl dgst -$METHOD $FILE | sed 's/([^)]*)//g' >>$DGST
+          done
+
+          echo "ASSET_ZIP=Xray-${{ matrix.target }}.zip" >> $GITHUB_ENV
+          echo "ASSET_DGST=Xray-${{ matrix.target }}.zip.dgst" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: xray_bin-${{ matrix.target }}.gz
-          path: xray_bin-${{ matrix.target }}.gz
+          name: Xray-${{ matrix.target }}
+          path: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
 
       - name: Upload macOS asset to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: xray_bin-${{ matrix.target }}.gz
+          files: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
