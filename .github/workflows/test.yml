@@ -26,6 +26,10 @@ jobs:
           sudo apt update
           sudo apt install -y llvm-dev libclang-dev clang pkg-config libssl-dev protobuf-compiler make build-essential
 
+      - name: Install rustfmt
+        run: |
+          rustup component add rustfmt
+
       - name: Check formatting
         run: |
           cargo fmt --all -- --check
