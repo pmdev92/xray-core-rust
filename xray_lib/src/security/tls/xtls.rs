@@ -2,10 +2,10 @@ use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::XraySecurity;
 use crate::security::tls::TlsSecurityStream;
 use futures::ready;
-use log::error;
+use log::{error, trace};
 use once_cell::sync::Lazy;
-use quinn::rustls::pki_types::ServerName;
 use quinn::rustls::ClientConfig;
+use quinn::rustls::pki_types::ServerName;
 use std::future::poll_fn;
 use std::io;
 use std::io::{BufRead, Error, ErrorKind, Read, Write};
@@ -246,7 +246,26 @@ impl AsyncWrite for TlsXtlsSecurityStream {
 
 impl AsyncXrayTcpStream for TlsXtlsSecurityStream {}
 
-impl XraySecurity for TlsXtlsSecurityStream {}
+impl XraySecurity for TlsXtlsSecurityStream {
+    fn is_h2(&self) -> bool {
+        match self.session.alpn_protocol() {
+            Some(proto) => {
+                let name = String::from_utf8_lossy(proto).to_string();
+                trace!("TLS ALPN selected: {}", name);
+                if name == "h2" {
+                    return true;
+                }
+            }
+
+            None => {
+                trace!("TLS ALPN selected: none");
+                return true;
+            }
+        }
+
+        false
+    }
+}
 
 enum ReadState {
     ReadHead([u8; 5], usize),

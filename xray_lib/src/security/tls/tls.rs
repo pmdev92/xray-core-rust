@@ -1,16 +1,17 @@
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::XraySecurity;
 use bytes::{Buf, BytesMut};
+use log::trace;
 use std::io;
 use std::io::{ErrorKind, Write};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio_rustls::client::TlsStream;
-use tokio_rustls::rustls::pki_types::ServerName;
-use tokio_rustls::rustls::ClientConfig;
 use tokio_rustls::TlsConnector;
+use tokio_rustls::client::TlsStream;
+use tokio_rustls::rustls::ClientConfig;
+use tokio_rustls::rustls::pki_types::ServerName;
 
 pub(crate) struct TlsSecurityStream {
     server_name: String,
@@ -216,4 +217,26 @@ impl AsyncWrite for TlsSecurityStream {
 
 impl AsyncXrayTcpStream for TlsSecurityStream {}
 
-impl XraySecurity for TlsSecurityStream {}
+impl XraySecurity for TlsSecurityStream {
+    fn is_h2(&self) -> bool {
+        if let Some(conn) = self.connection.as_ref() {
+            let (_, session) = conn.get_ref();
+            match session.alpn_protocol() {
+                Some(proto) => {
+                    let name = String::from_utf8_lossy(proto).to_string();
+                    trace!("TLS ALPN selected: {}", name);
+                    if name == "h2" {
+                        return true;
+                    }
+                }
+
+                None => {
+                    trace!("TLS ALPN selected: none");
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+}

@@ -2,7 +2,7 @@ use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::XraySecurity;
 use bytes::{Buf, BytesMut};
 use futures::ready;
-use log::error;
+use log::{error, trace};
 use quinn::rustls::ClientConfig;
 use std::io::{BufRead, Error, ErrorKind, Read, Write};
 use std::pin::Pin;
@@ -10,8 +10,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::{io, result};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::ClientConnection;
+use tokio_rustls::rustls::pki_types::ServerName;
 
 pub struct NewTlsSecurityStream {
     stream: Box<dyn AsyncXrayTcpStream + Send + Sync>,
@@ -225,7 +225,26 @@ impl AsyncWrite for NewTlsSecurityStream {
 
 impl AsyncXrayTcpStream for NewTlsSecurityStream {}
 
-impl XraySecurity for NewTlsSecurityStream {}
+impl XraySecurity for NewTlsSecurityStream {
+    fn is_h2(&self) -> bool {
+        match self.session.alpn_protocol() {
+            Some(proto) => {
+                let name = String::from_utf8_lossy(proto).to_string();
+                trace!("TLS ALPN selected: {}", name);
+                if name == "h2" {
+                    return true;
+                }
+            }
+
+            None => {
+                trace!("TLS ALPN selected: none");
+                return true;
+            }
+        }
+
+        false
+    }
+}
 
 struct SyncAdapter<'a, 'b> {
     pub stream: &'a mut Box<dyn AsyncXrayTcpStream + Send + Sync>,

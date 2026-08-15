@@ -16,4 +16,6 @@ pub trait Security: Send + Sync + Any {
     async fn add_alpn(&self, alpn_string: String);
 }
 
-pub trait XraySecurity: AsyncXrayTcpStream + Send + Sync {}
+pub trait XraySecurity: AsyncXrayTcpStream + Send + Sync {
+    fn is_h2(&self) -> bool;
+}

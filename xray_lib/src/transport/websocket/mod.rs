@@ -7,10 +7,10 @@ use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use bytes::BytesMut;
-use futures::{ready, Sink, Stream};
+use futures::{Sink, Stream, ready};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{client_async, WebSocketStream};
+use tokio_tungstenite::{WebSocketStream, client_async};
 
 use crate::common::net_location::NetLocation;
 use crate::core::io::AsyncXrayTcpStream;

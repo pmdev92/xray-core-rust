@@ -10,33 +10,33 @@ use crate::common::address::Address;
 use crate::common::net_location::NetLocation;
 use crate::core::context::Context;
 
+use crate::outbound::quinn_tuic::protocol::ToCommand;
 use crate::outbound::quinn_tuic::protocol::authenticate::Authenticate;
 use crate::outbound::quinn_tuic::protocol::enums::{CongestionControl, UdpRelayMode};
 use crate::outbound::quinn_tuic::protocol::heartbeat::Heartbeat;
-use crate::outbound::quinn_tuic::protocol::ToCommand;
 use crate::outbound::quinn_tuic::udp_api::UdpApi;
 use crate::outbound::quinn_tuic::udp_stream::TuicUdpStream;
-use crate::outbound::quinn_tuic::{to_io_error, TuicOptions};
+use crate::outbound::quinn_tuic::{TuicOptions, to_io_error};
 use aes::cipher::typenum::op;
 use bitvec::macros::internal::funty::Fundamental;
 use quinn_proto::congestion::{BbrConfig, CubicConfig, NewRenoConfig};
 use quinn_proto::{TransportConfig, VarInt};
-use rand::distributions::{Alphanumeric, DistString};
 use rand::Rng;
+use rand::distributions::{Alphanumeric, DistString};
 use std::collections::{HashMap, VecDeque};
 use std::io::{Error, ErrorKind};
 use std::net::{AddrParseError, SocketAddr};
 use std::ops::Deref;
 use std::sync::atomic::{AtomicI32, AtomicU32};
-use std::sync::{atomic, Arc};
-use std::task::{ready, Waker};
+use std::sync::{Arc, atomic};
+use std::task::{Waker, ready};
 use std::time::{Duration, Instant};
 use std::{future, io};
 use tls_parser::nom::error::context;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, MutexGuard, RwLock, TryLockError};
 use tokio::time::{sleep, timeout};
-use uuid::{uuid, Uuid};
+use uuid::{Uuid, uuid};
 
 pub(crate) struct TuicCounter {
     counter: Arc<AtomicI32>,

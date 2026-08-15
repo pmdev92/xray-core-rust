@@ -1,10 +1,11 @@
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::XraySecurity;
 use bytes::{Buf, BytesMut};
-use reality_tokio_rustls::client::TlsStream;
-use reality_tokio_rustls::rustls::pki_types::ServerName;
-use reality_tokio_rustls::rustls::ClientConfig;
+use log::trace;
 use reality_tokio_rustls::TlsConnector;
+use reality_tokio_rustls::client::TlsStream;
+use reality_tokio_rustls::rustls::ClientConfig;
+use reality_tokio_rustls::rustls::pki_types::ServerName;
 use std::io;
 use std::io::{ErrorKind, Read, Write};
 use std::pin::Pin;
@@ -224,4 +225,26 @@ impl AsyncWrite for RealitySecurityStream {
 
 impl AsyncXrayTcpStream for RealitySecurityStream {}
 
-impl XraySecurity for RealitySecurityStream {}
+impl XraySecurity for RealitySecurityStream {
+    fn is_h2(&self) -> bool {
+        if let Some(conn) = self.connection.as_ref() {
+            let (_, session) = conn.get_ref();
+            match session.alpn_protocol() {
+                Some(proto) => {
+                    let name = String::from_utf8_lossy(proto).to_string();
+                    trace!("TLS ALPN selected: {}", name);
+                    if name == "h2" {
+                        return true;
+                    }
+                }
+
+                None => {
+                    trace!("TLS ALPN selected: none");
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+}

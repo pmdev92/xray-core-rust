@@ -1,7 +1,7 @@
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::XraySecurity;
 use futures::ready;
-use log::error;
+use log::{error, trace};
 use once_cell::sync::Lazy;
 use reality_tokio_rustls::rustls::pki_types::ServerName;
 use reality_tokio_rustls::rustls::{ClientConfig, ClientConnection};
@@ -243,7 +243,26 @@ impl AsyncWrite for RealityXtlsSecurityStream {
 
 impl AsyncXrayTcpStream for RealityXtlsSecurityStream {}
 
-impl XraySecurity for RealityXtlsSecurityStream {}
+impl XraySecurity for RealityXtlsSecurityStream {
+    fn is_h2(&self) -> bool {
+        match self.session.alpn_protocol() {
+            Some(proto) => {
+                let name = String::from_utf8_lossy(proto).to_string();
+                trace!("TLS ALPN selected: {}", name);
+                if name == "h2" {
+                    return true;
+                }
+            }
+
+            None => {
+                trace!("TLS ALPN selected: none");
+                return true;
+            }
+        }
+
+        false
+    }
+}
 
 enum ReadState {
     ReadHead([u8; 5], usize),

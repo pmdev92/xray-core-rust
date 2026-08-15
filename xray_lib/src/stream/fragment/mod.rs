@@ -9,11 +9,11 @@ use std::io;
 use std::ops::Add;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use std::time::Duration;
 use tls_parser::nom::AsBytes;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::time::{sleep_until, Instant, Sleep};
+use tokio::time::{Instant, Sleep, sleep_until};
 
 pub mod config;
 pub struct FragmentStream {

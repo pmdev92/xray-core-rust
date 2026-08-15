@@ -3,7 +3,7 @@ use std::io;
 use std::io::ErrorKind;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::common::net_location::NetLocation;

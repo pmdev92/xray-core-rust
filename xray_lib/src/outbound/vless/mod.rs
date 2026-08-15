@@ -1,4 +1,4 @@
-use std::any::{type_name, Any};
+use std::any::{Any, type_name};
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 use std::io;
@@ -17,7 +17,8 @@ use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use crate::core::outbound::Outbound;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::outbound::vless::config::VlessSettings;
-use crate::outbound::vless::flow::{get_vless_addons, VlessFlow};
+use crate::outbound::vless::encryption::client::{ClientInstance, EncryptedTransport};
+use crate::outbound::vless::flow::{VlessFlow, get_vless_addons};
 use crate::outbound::vless::mux::VlessMuxStream;
 use crate::outbound::vless::util::get_global_id;
 use crate::outbound::vless::xtls::VisionStream;
@@ -35,6 +36,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::task::id;
 
 pub mod config;
+mod encryption;
 mod flow;
 mod mux;
 mod util;
@@ -46,6 +48,7 @@ pub struct VlessOutbound {
     uuid: Arc<Vec<u8>>,
     flow: VlessFlow,
     transport: Box<dyn Transport>,
+    encryption: Option<Arc<ClientInstance>>,
 }
 
 impl VlessOutbound {
@@ -68,12 +71,29 @@ impl VlessOutbound {
             _ => {}
         }
 
+        // Parse encryption from config string
+        let encryption = match &vless_settings.encryption {
+            Some(enc) => match encryption::parse_encryption(enc) {
+                Ok(Some(ci)) => {
+                    trace!("vless encryption enabled (ML-KEM-768 + X25519)");
+                    Some(Arc::new(ci))
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    error!("vless encryption parse failed: {}", e);
+                    None
+                }
+            },
+            None => None,
+        };
+
         Self {
             address: vless_settings.address,
             port: vless_settings.port,
             flow,
             uuid,
             transport,
+            encryption,
         }
     }
 }
@@ -86,9 +106,8 @@ impl Outbound for VlessOutbound {
         detour: Option<String>,
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, io::Error> {
-        return self
-            .get_vless_stream_tcp(context, detour, net_location)
-            .await;
+        self.get_vless_stream_tcp(context, detour, net_location)
+            .await
     }
 
     async fn dial_udp(
@@ -126,6 +145,15 @@ impl VlessOutbound {
                 tls.dial_xtls(context, detour, server_location).await?
             }
         };
+
+        // Perform encryption handshake and wrap transport if configured
+        let mut transport: Box<dyn XrayTransport> = if let Some(ref enc) = self.encryption {
+            let result = enc.handshake(&mut transport, true).await?;
+            Box::new(EncryptedTransport::new(transport, result))
+        } else {
+            transport
+        };
+
         let uuid = self.uuid.clone().to_vec();
 
         let port_bytes = net_location.port().to_be_bytes().to_vec();
@@ -213,7 +241,7 @@ impl VlessOutbound {
 
         transport.write_all(header_bytes.as_slice()).await?;
 
-        let mut transport: Box<dyn AsyncXrayTcpStream> = match self.flow {
+        let transport: Box<dyn AsyncXrayTcpStream> = match self.flow {
             VlessFlow::None => Box::new(VlessStream {
                 transport,
                 read_state: ReadState::ReadVersion,
@@ -264,7 +292,6 @@ enum ReadState {
 
 #[derive(PartialEq, Debug)]
 enum WriteState {
-    // WriteHeader,
     WriteUdpData,
     WriteTcpData,
 }
@@ -275,122 +302,118 @@ impl AsyncRead for VlessStream {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        if !self.read_buffer.is_empty() {
-            if let ReadState::ReadVersion = self.read_state {
-                if self.read_buffer.len() >= 1 {
-                    let _ = self.read_buffer.split_to(1);
-                    self.read_state = ReadState::ReadAdditionalInformationLength;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
+        loop {
+            if !self.read_buffer.is_empty() {
+                if let ReadState::ReadVersion = self.read_state {
+                    if self.read_buffer.len() >= 1 {
+                        let _ = self.read_buffer.split_to(1);
+                        self.read_state = ReadState::ReadAdditionalInformationLength;
+                        continue;
+                    }
                 }
-            }
-            if let ReadState::ReadAdditionalInformationLength = self.read_state {
-                if self.read_buffer.len() >= 1 {
-                    let count = self.read_buffer.split_to(1).get_u8();
-                    if count > 0 {
-                        self.read_state = ReadState::ReadAdditionalInformation(count);
-                    } else {
+                if let ReadState::ReadAdditionalInformationLength = self.read_state {
+                    if self.read_buffer.len() >= 1 {
+                        let count = self.read_buffer.split_to(1).get_u8();
+                        if count > 0 {
+                            self.read_state = ReadState::ReadAdditionalInformation(count);
+                        } else {
+                            if self.is_tcp {
+                                self.read_state = ReadState::ReadTcpData;
+                            } else {
+                                self.read_state = ReadState::ReadUdpDataLength;
+                            }
+                        }
+                        continue;
+                    }
+                }
+                if let ReadState::ReadAdditionalInformation(length) = self.read_state {
+                    let length = length as usize;
+                    if self.read_buffer.len() >= length {
+                        let _ = self.read_buffer.split_to(length);
                         if self.is_tcp {
                             self.read_state = ReadState::ReadTcpData;
                         } else {
                             self.read_state = ReadState::ReadUdpDataLength;
                         }
+                        continue;
                     }
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
                 }
-            }
-            if let ReadState::ReadAdditionalInformation(length) = self.read_state {
-                let length = length as usize;
-                if self.read_buffer.len() >= length {
-                    let _ = self.read_buffer.split_to(length);
-                    if self.is_tcp {
-                        self.read_state = ReadState::ReadTcpData;
-                    } else {
+                if let ReadState::ReadUdpDataLength = self.read_state {
+                    if self.read_buffer.len() >= 2 {
+                        let bytes = self.read_buffer.split_to(2);
+                        let length = BigEndian::read_u16(bytes.as_bytes());
+                        self.read_state = ReadState::ReadUdpData(length);
+                        continue;
+                    }
+                }
+                if let ReadState::ReadUdpData(length) = self.read_state {
+                    let length = length as usize;
+                    if self.read_buffer.len() >= length {
+                        let udp_data = self.read_buffer.split_to(length);
+                        buf.put_slice(udp_data.as_bytes());
                         self.read_state = ReadState::ReadUdpDataLength;
+                        return Poll::Ready(Ok(()));
                     }
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
                 }
-            }
-            if let ReadState::ReadUdpDataLength = self.read_state {
-                if self.read_buffer.len() >= 2 {
-                    let bytes = self.read_buffer.split_to(2);
-                    let length = BigEndian::read_u16(bytes.as_bytes());
-                    self.read_state = ReadState::ReadUdpData(length);
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-            }
-            if let ReadState::ReadUdpData(length) = self.read_state {
-                let length = length as usize;
-                if self.read_buffer.len() >= length {
-                    let udp_data = self.read_buffer.split_to(length);
-                    buf.put_slice(udp_data.as_bytes());
-                    self.read_state = ReadState::ReadUdpDataLength;
+                if let ReadState::ReadTcpData = self.read_state {
+                    let mut tcp_data = self.read_buffer.split();
+                    buf.put_slice(tcp_data.as_ref());
                     return Poll::Ready(Ok(()));
                 }
             }
-            if let ReadState::ReadTcpData = self.read_state {
-                let mut tcp_data = self.read_buffer.split();
-                buf.put_slice(tcp_data.as_ref());
-                return Poll::Ready(Ok(()));
-            }
-        }
-        let mut cast_to_raw = false;
-        let mut read_count = buf.capacity();
-        match &self.read_state {
-            ReadState::ReadVersion => {
-                read_count = 1;
-                cast_to_raw = true;
-            }
-            ReadState::ReadAdditionalInformationLength => {
-                read_count = 1;
-                cast_to_raw = true;
-            }
-            ReadState::ReadAdditionalInformation(length) => {
-                read_count = length.clone() as usize;
-                cast_to_raw = true;
-            }
-            ReadState::ReadUdpDataLength => {}
-            ReadState::ReadUdpData(_) => {}
-            ReadState::ReadTcpData => {}
-        }
 
-        //read data from transport
-        let mut buffer_vev = vec_allocate(read_count);
-        let mut buffer = ReadBuf::new(&mut buffer_vev);
-        let raw_stream: &mut Box<dyn AsyncXrayTcpStream> = if cast_to_raw {
-            let raw_stream: &mut Box<dyn AsyncXrayTcpStream> = match self.flow {
-                VlessFlow::None => &mut self.transport,
-                _ => {
-                    let any = self.transport.deref_mut() as &mut dyn Any;
-                    any.downcast_mut::<VisionStream>()
-                        .expect("vision stream")
-                        .as_raw_stream()
-                }
+            let cast_to_raw = match &self.read_state {
+                ReadState::ReadVersion => true,
+                ReadState::ReadAdditionalInformationLength => true,
+                ReadState::ReadAdditionalInformation(_) => true,
+                ReadState::ReadUdpDataLength => false,
+                ReadState::ReadUdpData(_) => false,
+                ReadState::ReadTcpData => false,
             };
-            raw_stream
-        } else {
-            &mut self.transport
-        };
 
-        let result = ready!(Pin::new(raw_stream).poll_read(cx, &mut buffer));
-        return match result {
-            Ok(_) => {
-                self.read_buffer.extend_from_slice(buffer.filled());
-                cx.waker().wake_by_ref();
-                Poll::Pending
+            let len = match &self.read_state {
+                ReadState::ReadVersion => 1usize,
+                ReadState::ReadAdditionalInformationLength => 1usize,
+                ReadState::ReadAdditionalInformation(length) => *length as usize,
+                ReadState::ReadUdpDataLength => 2usize,
+                ReadState::ReadUdpData(length) => *length as usize,
+                ReadState::ReadTcpData => buf.capacity(),
+            };
+
+            let raw_stream: &mut Box<dyn AsyncXrayTcpStream> = if cast_to_raw {
+                let raw_stream: &mut Box<dyn AsyncXrayTcpStream> = match self.flow {
+                    VlessFlow::None => &mut self.transport,
+                    _ => {
+                        let any = self.transport.deref_mut() as &mut dyn Any;
+                        any.downcast_mut::<VisionStream>()
+                            .expect("vision stream")
+                            .as_raw_stream()
+                    }
+                };
+                raw_stream
+            } else {
+                &mut self.transport
+            };
+
+            //read data from transport
+            let mut buffer_vev = vec_allocate(len);
+            let mut buffer = ReadBuf::new(&mut buffer_vev);
+            let result = ready!(Pin::new(raw_stream).poll_read(cx, &mut buffer));
+            match result {
+                Ok(_) => {
+                    self.read_buffer.extend_from_slice(buffer.filled());
+                    continue;
+                }
+                Err(err) => {
+                    let message = format!(
+                        "{{vless-read-state: {:?}, message: {}}}",
+                        self.read_state, err
+                    );
+                    let error = io::Error::new(err.kind(), message);
+                    return Poll::Ready(Err(error));
+                }
             }
-            Err(err) => {
-                let message = format!(
-                    "{{vless-read-state: {:?}, message: {}}}",
-                    self.read_state, err
-                );
-                let error = io::Error::new(err.kind(), message);
-                Poll::Ready(Err(error))
-            }
-        };
+        }
     }
 }
 
@@ -400,49 +423,60 @@ impl AsyncWrite for VlessStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        if let WriteState::WriteUdpData = self.write_state {
-            let len_buf = (buf.len() as u16).to_be_bytes();
-            let mut new_buf = Vec::new();
-            new_buf.extend_from_slice(&len_buf);
-            new_buf.extend_from_slice(&buf);
-            let result = ready!(Pin::new(&mut self.transport).poll_write(cx, &new_buf));
-            return match result {
-                Ok(_) => {
-                    // if count != new_buf.len() {
-                    //     let message = format!("{{vless-write-state: {:?}, message: vless udp packet write length error}}", self.write_state);
-                    //     return Poll::Ready(Err(s2n_quic_io::Error::new(ErrorKind::BrokenPipe, message)));
-                    // }
-                    Poll::Ready(Ok(buf.len()))
+        loop {
+            return match &mut self.write_state {
+                WriteState::WriteUdpData => {
+                    let len_buf = (buf.len() as u16).to_be_bytes();
+                    let mut new_buf = Vec::new();
+                    new_buf.extend_from_slice(&len_buf);
+                    new_buf.extend_from_slice(&buf);
+                    let result = ready!(Pin::new(&mut self.transport).poll_write(cx, &new_buf));
+                    match result {
+                        Ok(count) => {
+                            if count != new_buf.len() {
+                                let message = format!(
+                                    "{{vless-write-state: {:?}, message: vless udp packet write length error}}",
+                                    self.write_state
+                                );
+                                return Poll::Ready(Err(io::Error::new(
+                                    ErrorKind::BrokenPipe,
+                                    message,
+                                )));
+                            }
+                            Poll::Ready(Ok(buf.len()))
+                        }
+                        Err(err) => {
+                            let message = format!(
+                                "{{vless-write-state: {:?}, message: {}}}",
+                                self.write_state, err
+                            );
+                            Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, message)))
+                        }
+                    }
                 }
-                Err(err) => {
-                    let message = format!(
-                        "{{vless-write-state: {:?}, message: {}}}",
-                        self.write_state, err
-                    );
-                    Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, message)))
+                WriteState::WriteTcpData => {
+                    let result = ready!(Pin::new(&mut self.transport).poll_write(cx, buf));
+                    match result {
+                        Ok(size) => Poll::Ready(Ok(size)),
+                        Err(err) => {
+                            let message = format!(
+                                "{{vless-write-state: {:?}, message: {}}}",
+                                self.write_state, err
+                            );
+                            Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, message)))
+                        }
+                    }
                 }
             };
         }
-
-        let result = ready!(Pin::new(&mut self.transport).poll_write(cx, buf));
-        return match result {
-            Ok(size) => Poll::Ready(Ok(size)),
-            Err(err) => {
-                let message = format!(
-                    "{{vless-write-state: {:?}, message: {}}}",
-                    self.write_state, err
-                );
-                Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, message)))
-            }
-        };
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        return Pin::new(&mut self.get_mut().transport).poll_flush(cx);
+        Pin::new(&mut self.get_mut().transport).poll_flush(cx)
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        return Pin::new(&mut self.get_mut().transport).poll_shutdown(cx);
+        Pin::new(&mut self.get_mut().transport).poll_shutdown(cx)
     }
 }
 

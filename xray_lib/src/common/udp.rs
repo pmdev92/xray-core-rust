@@ -1,5 +1,5 @@
-use crate::common::buffer_manager::BufferHandle;
 use crate::common::constants::MAX_UDP_BUFFER_CAPACITY;
+use crate::common::vec::vec_allocate;
 use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use bytes::Bytes;
 use futures::{Sink, Stream};
@@ -9,14 +9,14 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::time::Instant;
 
 pub async fn get_udp_open_port(ip: &str) -> Option<u16> {
     {
         let local_addr = format!("{}:0", ip);
         let result = UdpSocket::bind(local_addr).await;
-        return match result {
+        match result {
             Ok(socket) => {
                 let result = socket.local_addr();
                 drop(socket);
@@ -26,12 +26,11 @@ pub async fn get_udp_open_port(ip: &str) -> Option<u16> {
                 }
             }
             Err(_) => None,
-        };
+        }
     }
 }
 
 pub struct TcpDatagramWrapper {
-    buffer_manager: Box<dyn BufferHandle>,
     stream: Box<dyn AsyncXrayTcpStream>,
     tx: Option<Bytes>,
     written: usize,
@@ -39,16 +38,10 @@ pub struct TcpDatagramWrapper {
 
 impl TcpDatagramWrapper {
     pub async fn new(
-        context: Arc<crate::Context>,
+        _context: Arc<crate::Context>,
         stream: Box<dyn AsyncXrayTcpStream>,
     ) -> Result<Box<dyn AsyncXrayUdpStream>, io::Error> {
-        let mut buffer_manager = context
-            .get_buffer_manager()
-            .get_buffer(MAX_UDP_BUFFER_CAPACITY)
-            .await?;
-
         let s = TcpDatagramWrapper {
-            buffer_manager,
             stream,
             tx: None,
             written: 0,
@@ -62,9 +55,9 @@ impl Stream for TcpDatagramWrapper {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = &mut *self;
-        let buf_slice = this.buffer_manager.data();
+        let mut buf_slice: Vec<u8> = vec_allocate(MAX_UDP_BUFFER_CAPACITY);
         let stream = &mut this.stream;
-        let mut rb = ReadBuf::new(buf_slice);
+        let mut rb = ReadBuf::new(buf_slice.as_mut_slice());
         match Pin::new(stream).poll_read(cx, &mut rb) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Ok(())) => {

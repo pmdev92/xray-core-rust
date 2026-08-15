@@ -3,7 +3,6 @@ mod logger;
 use crate::logger::LoggerType;
 use clap::{Arg, ArgMatches, Command};
 use std::fs::read_to_string;
-use xray_lib::ContextPlatform;
 
 const DEFAULT_CONFIG_PATH: &str = "config.json";
 
@@ -33,23 +32,6 @@ fn main() {
 }
 
 fn command_run(matches: &ArgMatches) {
-    // let config_link = matches.get_one::<String>("link");
-    // match config_link {
-    //     None => {}
-    //     Some(config_link) => {
-    //         let config = parse_url(config_link.clone());
-    //         match config {
-    //             None => {
-    //                 println!("can not parse config link '{}'", config_link)
-    //             }
-    //             Some(config) => {
-    //                 println!("config: '{}'", config.to_json_string().unwrap());
-    //                 run_config(config.to_json_string().unwrap())
-    //             }
-    //         }
-    //         return;
-    //     }
-    // }
     let is_verbose = matches.get_one::<bool>("verbose").unwrap_or(&false).clone();
     let config_path = matches.get_one::<String>("config");
     let config_path = match config_path {
@@ -87,15 +69,5 @@ fn run_config(config: String, is_verbose: bool) {
         }
     }
 
-    xray_lib::start(1, config, Some(Box::new(WindowsPlatform {})));
-}
-
-struct WindowsPlatform {}
-
-impl ContextPlatform for WindowsPlatform {
-    fn android_protect_fd(&self, _id: u64) {}
-
-    fn can_accept(&self) -> bool {
-        true
-    }
+    xray_lib::start(1, config);
 }

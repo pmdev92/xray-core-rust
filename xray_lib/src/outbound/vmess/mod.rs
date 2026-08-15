@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use aes::Aes128;
-use aes_gcm::aead::consts::U12;
 use aes_gcm::aead::Aead;
+use aes_gcm::aead::consts::U12;
 use aes_gcm::{Aes128Gcm, AesGcm, Key, KeyInit, Nonce};
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
@@ -34,14 +34,14 @@ use crate::outbound::vmess::aead::seal_vmess_aead_header;
 use crate::outbound::vmess::config::VmessSettings;
 use crate::outbound::vmess::fnv1a::Fnv1aHasher;
 use crate::outbound::vmess::kdf::{
-    vmess_kdf_1_one_shot, KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_IV,
-    KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_KEY, KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_IV,
-    KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_KEY,
+    KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_IV, KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_KEY,
+    KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_IV, KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_KEY,
+    vmess_kdf_1_one_shot,
 };
 use crate::outbound::vmess::protocol::{
-    generate_iv, generate_key, generate_respv, random_buffer,
-    VmessInstruction, VmessReadState, VmessSecurity, VmessWriteState, AES_128_GCM_SECURITY_NUM, CHACHA20POLY1305_SECURITY_NUM,
-    NONE_SECURITY_NUM, OPT_CHUNK_STREAM, VERSION,
+    AES_128_GCM_SECURITY_NUM, CHACHA20POLY1305_SECURITY_NUM, NONE_SECURITY_NUM, OPT_CHUNK_STREAM,
+    VERSION, VmessInstruction, VmessReadState, VmessSecurity, VmessWriteState, generate_iv,
+    generate_key, generate_respv, random_buffer,
 };
 
 mod aead;

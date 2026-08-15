@@ -122,7 +122,7 @@ jobs:
 
       - name: Build Apple
         run: |
-          ./xray_scripts/build_apple.sh
+          ./xray_scripts/apple_build.sh
 
       - name: Zip Artifacts
         run: |
@@ -169,7 +169,7 @@ jobs:
           export ANDROID_NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
           export ANDROID_NDK=/tmp/Android/sdk/ndk/28.2.13676358
           export OPENSSL_DIR=$(pkg-config --variable=prefix openssl)
-          ./xray_scripts/build_android.sh all
+          ./xray_scripts/android_build.sh all
 
       - name: Zip Artifacts
         run: |

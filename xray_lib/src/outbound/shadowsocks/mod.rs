@@ -1,13 +1,13 @@
-use std::any::{type_name, Any};
-use std::fmt::{format, Debug};
+use std::any::{Any, type_name};
+use std::fmt::{Debug, format};
 use std::io;
 use std::io::ErrorKind;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use aes::cipher::consts::U12;
 use aes::Aes192;
+use aes::cipher::consts::U12;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, AesGcm};
 use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
@@ -31,14 +31,14 @@ use crate::core::outbound::Outbound;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::outbound::shadowsocks::config::ShadowSocksSettings;
 use crate::outbound::shadowsocks::protocol::{
-    new_shadowsocks_tcp_cipher, new_shadowsocks_udp_cipher, ss2022_password_to_key, Cipher,
+    Cipher, new_shadowsocks_tcp_cipher, new_shadowsocks_udp_cipher, ss2022_password_to_key,
 };
 use crate::outbound::shadowsocks::tcp::{ShadowSocksTcpStream, TcpWriteState, UdpOverTcpReadState};
 use crate::outbound::shadowsocks::udp::ShadowSocksUdpStream;
 use crate::outbound::shadowsocks::udp_over_tcp_version_1::ShadowSocksUdpOverTcpVersion1Stream;
 use crate::outbound::shadowsocks::udp_over_tcp_version_2::ShadowSocksUdpOverTcpVersion2Stream;
-use crate::outbound::vless::config::VlessSettings;
 use crate::outbound::vless::VlessOutbound;
+use crate::outbound::vless::config::VlessSettings;
 use crate::transport::tcp::TcpTransportStream;
 
 mod cipher_aead;

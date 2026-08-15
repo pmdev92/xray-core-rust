@@ -6,4 +6,5 @@ pub struct VlessSettings {
     pub port: u16,
     pub id: String,
     pub flow: Option<String>,
+    pub encryption: Option<String>,
 }

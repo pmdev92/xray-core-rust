@@ -1,28 +1,24 @@
-use std::future::Future;
 use std::io;
 use std::io::ErrorKind;
-use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use async_trait::async_trait;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use futures_util::ready;
-use h2::{client, RecvStream, SendStream};
-use http::{Request, Uri, Version};
-use log::trace;
-use prost::encoding::{decode_varint, encode_varint};
-use tls_parser::nom::AsBytes;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
-use tokio::sync::Mutex;
 use crate::common::net_location::NetLocation;
 use crate::core::io::AsyncXrayTcpStream;
-use crate::core::security::{Security, XraySecurity};
+use crate::core::security::Security;
 use crate::core::stream::StreamSettings;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::stream::get_stream;
 use crate::transport::grpc::config::GrpcConfig;
+use async_trait::async_trait;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use h2::{RecvStream, SendStream, client};
+use http::{Request, Uri, Version};
+use log::{error, trace};
+use prost::encoding::{decode_varint, encode_varint};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::Mutex;
 
 pub mod config;
 
@@ -47,7 +43,7 @@ impl GrpcTransport {
                 stream_settings,
                 security,
                 service_name: grpc_config.service_name.clone(),
-                client: Arc::new(Default::default()),
+                client: Arc::new(Mutex::new(None)),
             },
         }
     }
@@ -68,26 +64,22 @@ impl Transport for GrpcTransport {
             server_net_location.clone(),
         )
         .await?;
+
         let mut host = server_net_location.address.to_string();
         if let Some(security) = &self.security {
             if let Some(domain) = security.get_domain() {
                 host = domain;
             }
         }
-        trace!("grpc transport host is {}", host);
 
         let mut path = "//Tun".to_string();
         if let Some(mut service_name) = self.service_name.clone() {
             if !service_name.starts_with("/") {
                 service_name = format!("/{}", service_name);
             }
-            let parts = service_name.split("/");
-            let parts: Vec<&str> = parts.collect();
-            let parts: Vec<&str> = parts
-                .into_iter()
-                .filter(|item| {
-                    return item != &"";
-                })
+            let parts: Vec<&str> = service_name
+                .split("/")
+                .filter(|item| !item.is_empty())
                 .collect();
 
             if parts.len() == 1 {
@@ -95,21 +87,30 @@ impl Transport for GrpcTransport {
             } else if parts.len() > 1 {
                 path = "".to_string();
                 for part in parts {
-                    let helper = format!("/{}", part);
-                    path.push_str(helper.as_str());
+                    path.push_str(&format!("/{}", part));
                 }
             }
         }
-        trace!("grpc transport path is {}", path);
+
         match &self.security {
             None => {
-                let mut client = {
+                let client = {
                     let client_clone = self.client.clone();
                     let mut result = client_clone.lock().await;
-                    let client = match result.as_ref() {
-                        Some(client) => client.clone(),
+                    match result.as_ref() {
+                        Some(client) => {
+                            trace!("grpc use exist connection");
+                            client.clone()
+                        }
                         None => {
-                            let (mut client, h2) = client::handshake(connection)
+                            trace!("grpc transport host is {}", host);
+                            trace!("grpc transport path is {}", path);
+                            let mut builder = client::Builder::new();
+                            builder
+                                .initial_window_size(1024 * 1024)
+                                .initial_connection_window_size(2 * 1024 * 1024);
+                            let (mut client, h2) = builder
+                                .handshake(connection)
                                 .await
                                 .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
                             let clone = self.client.clone();
@@ -120,9 +121,9 @@ impl Transport for GrpcTransport {
                             });
                             client
                         }
-                    };
-                    client
+                    }
                 };
+
                 let uri = Uri::builder()
                     .scheme("http")
                     .authority(host)
@@ -139,31 +140,43 @@ impl Transport for GrpcTransport {
                     .body(())
                     .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
 
-                let (response, sender) = client
-                    .send_request(request, false)
-                    .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                let (response, sender) = {
+                    let mut client = client;
+                    client
+                        .send_request(request, false)
+                        .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?
+                };
 
-
-                let http2_stream = GrpcStream {
+                Ok(Box::new(GrpcStream {
                     response,
                     receiver: None,
                     sender,
                     raw_buffer: BytesMut::new(),
                     buffer: BytesMut::new(),
-                    remaining_read: 0,
-                };
-                Ok(Box::new(http2_stream))
+                }))
             }
+
             Some(security) => {
-                let mut client = {
+                let client = {
                     let client_clone = self.client.clone();
                     let mut result = client_clone.lock().await;
-                    let client = match result.as_ref() {
-                        Some(client) => client.clone(),
+                    match result.as_ref() {
+                        Some(client) => {
+                            trace!("grpc use exist connection");
+                            client.clone()
+                        }
                         None => {
+                            trace!("grpc transport host is {}", host);
+                            trace!("grpc transport path is {}", path);
                             security.add_alpn("h2".to_string()).await;
+                            security.add_alpn("http/1.1".to_string()).await;
                             let connection = security.dial(connection).await?;
-                            let (mut client, h2) = client::handshake(connection)
+                            let mut builder = client::Builder::new();
+                            builder
+                                .initial_window_size(1024 * 1024)
+                                .initial_connection_window_size(2 * 1024 * 1024);
+                            let (mut client, h2) = builder
+                                .handshake(connection)
                                 .await
                                 .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
                             let clone = self.client.clone();
@@ -174,15 +187,16 @@ impl Transport for GrpcTransport {
                             });
                             client
                         }
-                    };
-                    client
+                    }
                 };
+
                 let uri = Uri::builder()
                     .scheme("https")
                     .authority(host)
                     .path_and_query(path)
                     .build()
                     .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+
                 let request = Request::builder()
                     .uri(uri)
                     .version(Version::HTTP_2)
@@ -192,20 +206,20 @@ impl Transport for GrpcTransport {
                     .body(())
                     .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
 
-                let (response, sender) = client
-                    .send_request(request, false)
-                    .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?;
+                let (response, sender) = {
+                    let mut client = client;
+                    client
+                        .send_request(request, false)
+                        .map_err(|err| io::Error::new(ErrorKind::Other, err.to_string()))?
+                };
 
-                let http2_stream = GrpcStream {
+                Ok(Box::new(GrpcStream {
                     response,
                     receiver: None,
                     sender,
                     raw_buffer: BytesMut::new(),
                     buffer: BytesMut::new(),
-                    remaining_read: 0,
-                };
-
-                Ok(Box::new(http2_stream))
+                }))
             }
         }
     }
@@ -217,16 +231,27 @@ struct GrpcStream {
     sender: SendStream<Bytes>,
     raw_buffer: BytesMut,
     buffer: BytesMut,
-    remaining_read: usize,
 }
 
 impl GrpcStream {
-    fn reserve_send_capacity(&mut self, data: &[u8]) {
-        let mut buf = [0u8; 10];
-        let mut buf = &mut buf[..];
-        encode_varint(data.len() as u64, &mut buf);
-        self.sender
-            .reserve_capacity(6 + 10 - buf.len() + data.len());
+    const MAX_WRITE_PAYLOAD: usize = 16 * 1024;
+
+    fn encoded_len(payload_len: usize) -> usize {
+        let mut value = payload_len as u64;
+        let mut varint_len = 1;
+        while value >= 0x80 {
+            value >>= 7;
+            varint_len += 1;
+        }
+        6 + varint_len + payload_len
+    }
+
+    fn payload_for_capacity(capacity: usize, max_payload: usize) -> usize {
+        let mut payload_len = max_payload.min(capacity.saturating_sub(7));
+        while payload_len > 0 && Self::encoded_len(payload_len) > capacity {
+            payload_len -= 1;
+        }
+        payload_len
     }
 
     fn encode_buf(&self, data: &[u8]) -> Bytes {
@@ -240,6 +265,83 @@ impl GrpcStream {
         buf.put_slice(data);
         buf.freeze()
     }
+
+    fn decode_next_message(&mut self) -> io::Result<bool> {
+        const GRPC_HEADER_LEN: usize = 5;
+        const MAX_GRPC_MESSAGE_LEN: usize = 64 * 1024 * 1024;
+
+        if self.raw_buffer.len() < GRPC_HEADER_LEN {
+            return Ok(false);
+        }
+
+        let compression_flag = self.raw_buffer[0];
+        if compression_flag != 0 {
+            error!(
+                "grpc decode failed: unsupported compression flag={}",
+                compression_flag
+            );
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "compressed gRPC messages are not supported",
+            ));
+        }
+
+        let message_len = u32::from_be_bytes([
+            self.raw_buffer[1],
+            self.raw_buffer[2],
+            self.raw_buffer[3],
+            self.raw_buffer[4],
+        ]) as usize;
+
+        if message_len > MAX_GRPC_MESSAGE_LEN {
+            error!("grpc decode failed: message too large={}", message_len);
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "gRPC message is too large",
+            ));
+        }
+
+        let frame_len = GRPC_HEADER_LEN
+            .checked_add(message_len)
+            .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, "invalid gRPC frame length"))?;
+
+        if self.raw_buffer.len() < frame_len {
+            return Ok(false);
+        }
+
+        self.raw_buffer.advance(GRPC_HEADER_LEN);
+        let mut message = self.raw_buffer.split_to(message_len);
+
+        if message.is_empty() || message.get_u8() != 0x0a {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "invalid gRPC protobuf payload",
+            ));
+        }
+
+        let payload_len = decode_varint(&mut message)
+            .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
+            as usize;
+
+        if payload_len != message.len() {
+            error!(
+                "grpc decode failed: protobuf payload length={}, remaining={}",
+                payload_len,
+                message.len()
+            );
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "invalid gRPC protobuf payload length",
+            ));
+        }
+
+        trace!(
+            "grpc decoded message: frame_payload={} bytes, proxy_payload={} bytes",
+            message_len, payload_len
+        );
+        self.buffer = message.split_to(payload_len);
+        Ok(true)
+    }
 }
 
 impl AsyncRead for GrpcStream {
@@ -248,92 +350,97 @@ impl AsyncRead for GrpcStream {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
+        if buf.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+
         if self.receiver.is_none() {
-            let result = ready!(Pin::new(&mut self.response).poll(cx));
-            match result {
+            let response = match Pin::new(&mut self.response).poll(cx) {
+                Poll::Pending => {
+                    trace!("grpc download: waiting for response headers");
+                    return Poll::Pending;
+                }
+                Poll::Ready(r) => r,
+            };
+            match response {
                 Ok(response) => {
+                    trace!(
+                        "grpc download: response headers received, status={}",
+                        response.status()
+                    );
                     self.receiver = Some(response.into_body());
                 }
                 Err(error) => {
+                    error!("grpc download: response failed: {}", error);
                     return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, error)));
                 }
             }
         }
-        if !self.raw_buffer.is_empty() {
-            if self.remaining_read > 0 {
-                if self.raw_buffer.len() > self.remaining_read {
-                    let len = self.remaining_read;
-                    let data = self.raw_buffer.split_to(len);
-                    self.buffer.extend_from_slice(data.as_bytes());
-                    self.remaining_read = 0;
-                } else {
-                    let len = self.raw_buffer.len();
-                    let data = self.raw_buffer.split();
-                    self.buffer.extend_from_slice(data.as_bytes());
-                    self.remaining_read = self.remaining_read - len;
-                }
-            }
-            while self.raw_buffer.len() > 6 {
-                self.raw_buffer.advance(6);
-                let result = decode_varint(&mut self.raw_buffer);
-                match result {
-                    Err(error) => {
-                        return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, error)));
-                    }
-                    Ok(len) => {
-                        if len as usize > self.raw_buffer.len() {
-                            let remaining = self.raw_buffer.len();
-                            self.remaining_read = len as usize - remaining;
-                            let data = self.raw_buffer.split();
-                            self.buffer.extend_from_slice(data.as_bytes());
-                            break;
-                        } else {
-                            let data = self.raw_buffer.split_to(len as usize);
-                            self.buffer.extend_from_slice(data.as_bytes());
-                        }
-                    }
-                };
-            }
-        }
-        if self.remaining_read == 0 || buf.remaining() < self.buffer.len() {
+
+        loop {
             if !self.buffer.is_empty() {
-                let to_read = std::cmp::min(buf.remaining(), self.buffer.len());
+                let to_read = buf.remaining().min(self.buffer.len());
                 let data = self.buffer.split_to(to_read);
-                buf.put_slice(&data[..to_read]);
+                buf.put_slice(&data);
+                trace!("grpc download: delivered {} proxy bytes", to_read);
                 return Poll::Ready(Ok(()));
             }
-        }
-        match ready!(
-            Pin::new(&mut self.receiver)
-                .as_pin_mut()
-                .unwrap()
-                .poll_data(cx)
-        ) {
-            Some(Ok(data)) => {
-                self.raw_buffer.put_slice(data.as_bytes());
-                let result = self
-                    .receiver
-                    .as_mut()
-                    .unwrap()
-                    .flow_control()
-                    .release_capacity(data.len())
-                    .map_or_else(
-                        |e| Err(io::Error::new(ErrorKind::ConnectionReset, e)),
-                        |_| Ok(()),
-                    );
-                match result {
-                    Ok(_ok) => {
-                        cx.waker().wake_by_ref();
-                        Poll::Pending
-                    }
-                    Err(err) => Poll::Ready(Err(err)),
+
+            match self.decode_next_message() {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    error!("grpc download: decode failed: {}", error);
+                    return Poll::Ready(Err(error));
                 }
             }
-            _ => {
-                // self.sender.
-                Poll::Ready(Ok(()))
-                // let string = format!("grpc none remaining_read {}", self.remaining_read);
-                // Poll::Ready(Err(s2n_quic_io::Error::new(ErrorKind::BrokenPipe, string)))
+
+            let data = match Pin::new(self.receiver.as_mut().unwrap()).poll_data(cx) {
+                Poll::Pending => {
+                    trace!(
+                        "grpc download: waiting for DATA, buffered={} bytes",
+                        self.raw_buffer.len()
+                    );
+                    return Poll::Pending;
+                }
+                Poll::Ready(Some(Ok(data))) => data,
+                Poll::Ready(Some(Err(error))) => {
+                    error!("grpc download: DATA error: {}", error);
+                    return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, error)));
+                }
+                Poll::Ready(None) if self.raw_buffer.is_empty() => {
+                    trace!("grpc download: response body ended cleanly");
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Ready(None) => {
+                    error!(
+                        "grpc download: response ended with incomplete frame, buffered={} bytes",
+                        self.raw_buffer.len()
+                    );
+                    return Poll::Ready(Err(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "incomplete gRPC frame",
+                    )));
+                }
+            };
+
+            let data_len = data.len();
+            self.raw_buffer.extend_from_slice(&data);
+            trace!(
+                "grpc download: received DATA={} bytes, buffered={} bytes",
+                data_len,
+                self.raw_buffer.len()
+            );
+
+            if let Err(error) = self
+                .receiver
+                .as_mut()
+                .unwrap()
+                .flow_control()
+                .release_capacity(data_len)
+            {
+                error!("grpc download: release capacity failed: {}", error);
+                return Poll::Ready(Err(io::Error::new(ErrorKind::ConnectionReset, error)));
             }
         }
     }
@@ -345,24 +452,76 @@ impl AsyncWrite for GrpcStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        self.reserve_send_capacity(buf);
-        let result = ready!(self.sender.poll_capacity(cx));
-        match result {
-            None => {}
-            Some(result) => match result {
-                Ok(_) => {}
-                Err(err) => {
-                    return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, err)));
-                }
-            },
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
         }
 
-        let encoded_buf = self.encode_buf(buf);
-        let result = self.sender.send_data(encoded_buf, false);
-        return match result {
-            Ok(_) => Poll::Ready(Ok(buf.len())),
-            Err(err) => Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, err))),
-        };
+        let desired_payload = buf.len().min(Self::MAX_WRITE_PAYLOAD);
+        let desired_capacity = Self::encoded_len(desired_payload);
+        self.sender.reserve_capacity(desired_capacity);
+        trace!(
+            "grpc upload: requested={} bytes, chunk={} bytes, frame={} bytes, available={}",
+            buf.len(),
+            desired_payload,
+            desired_capacity,
+            self.sender.capacity()
+        );
+
+        loop {
+            match self.sender.poll_capacity(cx) {
+                Poll::Pending => {
+                    trace!(
+                        "grpc upload: waiting for capacity, available={}",
+                        self.sender.capacity()
+                    );
+                    return Poll::Pending;
+                }
+                Poll::Ready(None) => {
+                    error!("grpc upload: send stream closed while waiting for capacity");
+                    return Poll::Ready(Err(io::Error::new(
+                        ErrorKind::BrokenPipe,
+                        "gRPC send stream is closed",
+                    )));
+                }
+                Poll::Ready(Some(Err(error))) => {
+                    error!("grpc upload: capacity error: {}", error);
+                    return Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, error)));
+                }
+                Poll::Ready(Some(Ok(granted))) => {
+                    trace!(
+                        "grpc upload: capacity granted={}, available={}",
+                        granted,
+                        self.sender.capacity()
+                    );
+                }
+            }
+
+            let payload_len = Self::payload_for_capacity(self.sender.capacity(), desired_payload);
+            if payload_len == 0 {
+                trace!(
+                    "grpc upload: capacity cannot fit a frame yet, available={}",
+                    self.sender.capacity()
+                );
+                self.sender.reserve_capacity(desired_capacity);
+                continue;
+            }
+
+            let encoded_buf = self.encode_buf(&buf[..payload_len]);
+            let frame_len = encoded_buf.len();
+            return match self.sender.send_data(encoded_buf, false) {
+                Ok(()) => {
+                    trace!(
+                        "grpc upload: sent proxy_payload={} bytes, frame={} bytes",
+                        payload_len, frame_len
+                    );
+                    Poll::Ready(Ok(payload_len))
+                }
+                Err(error) => {
+                    error!("grpc upload: send_data failed: {}", error);
+                    Poll::Ready(Err(io::Error::new(ErrorKind::BrokenPipe, error)))
+                }
+            };
+        }
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
@@ -377,10 +536,7 @@ impl AsyncWrite for GrpcStream {
             |e| Err(io::Error::new(ErrorKind::BrokenPipe, e)),
             |_| Ok(()),
         );
-        // self.task.abort();
         Poll::Ready(result)
-
-        // Poll::Ready(Ok(()))
     }
 }
 

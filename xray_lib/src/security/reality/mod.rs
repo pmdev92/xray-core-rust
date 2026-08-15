@@ -67,9 +67,9 @@ impl RealitySecurity {
             error!("reality short id hex string length is more than 8 bytes");
             panic!()
         }
-        let version_x = config.version_x.unwrap_or(1);
-        let version_y = config.version_x.unwrap_or(8);
-        let version_z = config.version_x.unwrap_or(6);
+        let version_x = config.version_x.unwrap_or(26);
+        let version_y = config.version_y.unwrap_or(3);
+        let version_z = config.version_z.unwrap_or(27);
 
         let mut client_config = ClientConfig::builder()
             .dangerous()
@@ -124,7 +124,6 @@ impl Security for RealitySecurity {
         stream: Box<dyn AsyncXrayTcpStream + Send + Sync>,
     ) -> Result<Box<dyn XraySecurity>, io::Error> {
         let config = self.client_config.read().await.clone();
-
         let reality = RealitySecurityStream::new(
             self.server_name.clone(),
             config,

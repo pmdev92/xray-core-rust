@@ -7,31 +7,31 @@ use crate::core::router::config::RouterConfig;
 use crate::core::router::router::Router;
 use crate::core::security::Security;
 use crate::core::transport::Transport;
-use crate::inbound::http::config::HttpInboundSettings;
 use crate::inbound::http::HttpInbound;
-use crate::inbound::socks::config::Socks5InboundSettings;
+use crate::inbound::http::config::HttpInboundSettings;
 use crate::inbound::socks::Socks5Inbound;
+use crate::inbound::socks::config::Socks5InboundSettings;
 use crate::outbound::block::BlockOutbound;
 use crate::outbound::direct::DirectOutbound;
-use crate::outbound::quinn_hysteria2::config::HysteriaQuinnSettings;
 use crate::outbound::quinn_hysteria2::HysteriaQuinnOutbound;
-use crate::outbound::quinn_tuic::config::TuicQuinnSettings;
+use crate::outbound::quinn_hysteria2::config::HysteriaQuinnSettings;
 use crate::outbound::quinn_tuic::TuicQuinnOutbound;
-use crate::outbound::shadowsocks::config::ShadowSocksSettings;
+use crate::outbound::quinn_tuic::config::TuicQuinnSettings;
 use crate::outbound::shadowsocks::ShadowSocksOutbound;
-use crate::outbound::socks5::config::Socks5Settings;
+use crate::outbound::shadowsocks::config::ShadowSocksSettings;
 use crate::outbound::socks5::Socks5Outbound;
-use crate::outbound::trojan::config::TrojanSettings;
+use crate::outbound::socks5::config::Socks5Settings;
 use crate::outbound::trojan::TrojanOutbound;
-use crate::outbound::vless::config::VlessSettings;
+use crate::outbound::trojan::config::TrojanSettings;
 use crate::outbound::vless::VlessOutbound;
-use crate::outbound::vmess::config::VmessSettings;
+use crate::outbound::vless::config::VlessSettings;
 use crate::outbound::vmess::VmessOutbound;
+use crate::outbound::vmess::config::VmessSettings;
 use crate::security::reality::RealitySecurity;
 use crate::security::tls::TlsSecurity;
 use crate::transport::grpc::GrpcTransport;
-use crate::transport::http2::Http2Transport;
 use crate::transport::http_upgrade::HttpUpgradeTransport;
+use crate::transport::http2::Http2Transport;
 use crate::transport::tcp::TcpTransport;
 use crate::transport::websocket::WebsocketTransport;
 use crate::transport::xhttp::XHttpTransport;
@@ -43,7 +43,6 @@ use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
-    pub memory: Option<MemoryConfig>,
     pub log: Option<LogConfig>,
     pub inbounds: Vec<InboundConfig>,
     pub outbounds: Vec<OutboundConfig>,
@@ -61,23 +60,6 @@ impl Config {
         let mut inbounds: Vec<Box<dyn InboundTcp>> = vec![];
         for inbounds_config in self.inbounds.iter() {
             let inbound_instance: Box<dyn InboundTcp> = match inbounds_config.protocol.as_str() {
-                // "tun" => {
-                //     let Some(setting) = &inbounds_config.settings else {
-                //         let error = io::Error::new(
-                //             ErrorKind::InvalidData,
-                //             "tun inbound must have setting".to_string(),
-                //         );
-                //         return Err(error);
-                //     };
-                //     let result: io::Result<TunInboundSettings> =
-                //         serde_json::from_str(setting.get())
-                //             .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()));
-                //     let Ok(setting) = result else {
-                //         return Err(result.err().unwrap());
-                //     };
-                //
-                //     Box::new(TunInbound::new(setting))
-                // }
                 "socks" => {
                     let Some(setting) = &inbounds_config.settings else {
                         let error = io::Error::new(

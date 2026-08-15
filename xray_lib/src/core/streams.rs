@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use tls_parser::nom::complete::bool;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpStream, UdpSocket};

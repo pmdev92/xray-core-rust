@@ -20,7 +20,7 @@ use bytes::{Bytes, BytesMut};
 use futures_util::future::err;
 use futures_util::ready;
 use h2::client::ResponseFuture;
-use h2::{client, RecvStream, SendStream};
+use h2::{RecvStream, SendStream, client};
 use http::{Request, Response, Uri, Version};
 use log::{error, trace};
 use rand::Rng;

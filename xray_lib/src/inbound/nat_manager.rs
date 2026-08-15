@@ -5,8 +5,8 @@ use crate::core::io::AsyncXrayUdpStream;
 use crate::core::router::Network;
 use crate::core::session::Session;
 use crate::core::sniffer::Sniffer;
-use crate::inbound::socks::udp::{Sock5UdpStream, Socks5UDPCodec};
 use crate::inbound::InboundProtocol;
+use crate::inbound::socks::udp::{Sock5UdpStream, Socks5UDPCodec};
 use bytes::Bytes;
 use futures::{Sink, Stream};
 use futures_util::stream::SplitSink;
@@ -123,7 +123,6 @@ impl NatManager {
                     }
                     None => {
                         let session = Session::new(
-                            self.session.get_new_session(),
                             InboundProtocol::SOCKS,
                             Network::Udp,
                             packet.src_addr.to_socket_addr_native().ok(),

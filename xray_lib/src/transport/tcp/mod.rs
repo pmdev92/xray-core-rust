@@ -4,7 +4,7 @@ use std::io;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 
 use async_trait::async_trait;
 use bytes::BytesMut;
@@ -18,8 +18,8 @@ use crate::core::security::{Security, XraySecurity};
 use crate::core::stream::StreamSettings;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::security::reality::RealitySecurity;
-use crate::security::tls::xtls::TlsXtlsSecurityStream;
 use crate::security::tls::TlsSecurity;
+use crate::security::tls::xtls::TlsXtlsSecurityStream;
 use crate::stream::get_stream;
 use crate::transport::tcp::config::{RequestConfig, TcpConfig};
 

@@ -70,12 +70,9 @@ impl Sniffer {
                 )),
             };
         }
-        let mut buffer_manager = context
-            .get_buffer_manager()
-            .get_buffer(MAX_TCP_BUFFER_CAPACITY)
-            .await?;
-        let mut buffer = buffer_manager.data();
-        let result = stream.read(&mut buffer).await;
+
+        let mut buffer = vec_allocate(MAX_TCP_BUFFER_CAPACITY);
+        let result = stream.read(buffer.as_mut_slice()).await;
         match result {
             Ok(read) => {
                 let data = &buffer[..read];
@@ -177,7 +174,7 @@ impl Sniffer {
                     .dial_tcp(context.clone(), item.detour, target_location.clone())
                     .await;
                 match result {
-                    Ok(mut outbound_stream) => Ok(outbound_stream),
+                    Ok(outbound_stream) => Ok(outbound_stream),
                     Err(error) => {
                         warn!(
                             "route tcp error target location: {} message:\"{}\"",
@@ -353,16 +350,16 @@ impl TryFrom<&str> for SniffProtocol {
     type Error = io::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if (value.to_lowercase() == "http") {
+        if value.to_lowercase() == "http" {
             return Ok(SniffProtocol::Http);
         }
-        if (value.to_lowercase() == "tls") {
+        if value.to_lowercase() == "tls" {
             return Ok(SniffProtocol::Tls);
         }
-        if (value.to_lowercase() == "quic") {
+        if value.to_lowercase() == "quic" {
             return Ok(SniffProtocol::Quic);
         }
-        if (value.to_lowercase() == "dns") {
+        if value.to_lowercase() == "dns" {
             return Ok(SniffProtocol::Dns);
         }
         Err(io::Error::from(io::ErrorKind::InvalidInput))
@@ -385,7 +382,7 @@ impl Display for SniffProtocol {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 

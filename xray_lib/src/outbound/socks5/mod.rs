@@ -9,7 +9,9 @@ use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use crate::core::outbound::Outbound;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::outbound::socks5::config::Socks5Settings;
-use crate::outbound::socks5::protocol::auth_methods::{NO_AUTH, NO_METHODS, USER_PASSWORD_AUTH, USER_PASSWORD_AUTH_SUCCESS, USER_PASSWORD_AUTH_VERSION};
+use crate::outbound::socks5::protocol::auth_methods::{
+    NO_AUTH, NO_METHODS, USER_PASSWORD_AUTH, USER_PASSWORD_AUTH_SUCCESS, USER_PASSWORD_AUTH_VERSION,
+};
 use crate::outbound::socks5::protocol::response_code::SUCCESS;
 use crate::outbound::socks5::protocol::socks_command::{CONNECT, UDP_ASSOSIATE};
 use crate::outbound::socks5::protocol::{RESERVED, SOCKS_VERSION};
@@ -19,8 +21,8 @@ use async_trait::async_trait;
 use bytes::BytesMut;
 use futures_util::future::err;
 use log::{error, trace, warn};
-use std::any::{type_name, Any};
-use std::fmt::{format, Debug};
+use std::any::{Any, type_name};
+use std::fmt::{Debug, format};
 use std::io;
 use std::io::ErrorKind;
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -63,9 +65,11 @@ impl Socks5Outbound {
         })
     }
 
-    async fn auth(&self,
-                  context: Arc<crate::core::context::Context>,
-                  detour: Option<String>,) -> Result<Box<dyn XrayTransport>, io::Error> {
+    async fn auth(
+        &self,
+        context: Arc<crate::core::context::Context>,
+        detour: Option<String>,
+    ) -> Result<Box<dyn XrayTransport>, io::Error> {
         let address = Address::from(&self.address)?;
         let server_location = Arc::new(NetLocation::new(address, self.port));
         let mut transport = self
@@ -141,7 +145,6 @@ impl Socks5Outbound {
     }
 }
 
-
 #[async_trait]
 impl Outbound for Socks5Outbound {
     async fn dial_tcp(
@@ -150,9 +153,7 @@ impl Outbound for Socks5Outbound {
         detour: Option<String>,
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, io::Error> {
-
-
-        let mut transport = self.auth(context,detour).await?;
+        let mut transport = self.auth(context, detour).await?;
 
         //version method reserved
         let data = [SOCKS_VERSION, CONNECT, RESERVED];
@@ -218,8 +219,7 @@ impl Outbound for Socks5Outbound {
         detour: Option<String>,
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayUdpStream>, io::Error> {
-
-        let mut transport = self.auth(context.clone(),detour).await?;
+        let mut transport = self.auth(context.clone(), detour).await?;
 
         //version method reserved
         let data = [SOCKS_VERSION, UDP_ASSOSIATE, RESERVED];

@@ -33,9 +33,9 @@ use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use crate::core::router::Network;
 use crate::core::session::Session;
 use crate::core::sniffer::Sniffer;
+use crate::inbound::InboundProtocol;
 use crate::inbound::nat_manager::NatManager;
 use crate::inbound::socks::config::Socks5InboundSettings;
-use crate::inbound::InboundProtocol;
 
 pub mod config;
 pub(crate) mod protocol;
@@ -328,21 +328,8 @@ impl InboundTcp for Socks5Inbound {
                                 continue;
                             }
                         };
-                        if !context.can_accept() {
-                            warn!("platform reject accept new connection.");
-                            continue;
-                        }
-                        let session_manager = context.get_session_manager().add_new_session().await;
-                        let session_manager = match session_manager {
-                            Ok(session_manager) => Arc::new(session_manager),
-                            Err(err) => {
-                                warn!("{}", err);
-                                continue;
-                            }
-                        };
 
                         let session = Session::new(
-                            session_manager,
                             InboundProtocol::SOCKS,
                             Network::Tcp,
                             socket.local_addr().ok(),

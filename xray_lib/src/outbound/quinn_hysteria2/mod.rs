@@ -10,9 +10,10 @@ use bytes::{Bytes, BytesMut};
 use futures_util::AsyncWriteExt;
 use h3::client::SendRequest;
 use log::{error, info, trace, warn};
-use quinn_proto::coding::Codec;
 use quinn_proto::VarInt;
+use quinn_proto::coding::Codec;
 use rand::Rng;
+use rand::distributions::{Alphanumeric, DistString};
 use s2n_quic::stream::BidirectionalStream;
 use s2n_quic_core::connection::Limits;
 use tls_parser::nom::Parser;
@@ -30,7 +31,9 @@ use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
 use crate::core::outbound::Outbound;
 use crate::core::transport::{Transport, XrayTransport};
 use crate::outbound::quinn_hysteria2::config::HysteriaQuinnSettings;
-use crate::outbound::quinn_hysteria2::handler::Hysteria2OutboundHandler;
+use crate::outbound::quinn_hysteria2::handler::{
+    Hysteria2ConnectionState, Hysteria2OutboundHandler,
+};
 use crate::outbound::quinn_hysteria2::tcp_stream::Hysteria2TcpStream;
 use crate::outbound::quinn_hysteria2::udp_stream::Hysteria2UdpStream;
 use crate::outbound::quinn_hysteria2::varint::decode;
@@ -39,10 +42,10 @@ use crate::security::tls::config::TlsConfig;
 use crate::security::tls::verify::TlsNoCertVerifier;
 
 pub mod config;
+mod gecko;
 pub(crate) mod handler;
 pub(crate) mod salamander;
 pub(crate) mod tcp_stream;
-
 pub(crate) mod udp;
 pub(crate) mod udp_api;
 pub(crate) mod udp_stream;
@@ -70,6 +73,8 @@ pub(crate) struct Hysteria2S2nQuicOptions {
     timeout: u64,
     quic_max_idle_timeout: Option<u64>,
     quic_max_keep_alive_period: Option<u64>,
+    gecko_min_packet_len: Option<usize>,
+    gecko_max_packet_len: Option<usize>,
 }
 
 impl HysteriaQuinnOutbound {
@@ -164,6 +169,8 @@ impl HysteriaQuinnOutbound {
                 quic_max_idle_timeout: hysteria2_settings.quic_max_idle_timeout,
                 quic_max_keep_alive_period: hysteria2_settings.quic_max_keep_alive_period,
                 timeout: 5,
+                gecko_min_packet_len: hysteria2_settings.gecko_min_packet_len,
+                gecko_max_packet_len: hysteria2_settings.gecko_max_packet_len,
             },
         }
     }
@@ -178,8 +185,9 @@ impl Outbound for HysteriaQuinnOutbound {
         net_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, Error> {
         trace!("dial tcp to {}", net_location.to_hysteria2_str());
-        let (counter, connection_closer, (mut send_stream, mut receive_stream)) = {
-            let (counter, connection_closer, result) = {
+        let dial_start = std::time::Instant::now();
+        let (counter, connection_state, (mut send_stream, mut receive_stream)) = {
+            let (counter, connection_state, result) = {
                 let mut handler = self.handler.lock().await;
                 let hysteria2_connection_result =
                     handler.open_stream(context, detour, &self.options).await;
@@ -194,38 +202,49 @@ impl Outbound for HysteriaQuinnOutbound {
                         return Err(error);
                     }
                 };
-                let connection_closer = hysteria2_connection.get_connection_closer();
+                let connection_state = hysteria2_connection.get_connection_state();
                 (
                     hysteria2_connection.hysteria2_counter,
-                    connection_closer,
+                    connection_state,
                     hysteria2_connection.connection.open_bi().await,
                 )
             };
             match result {
-                Ok(result) => (counter, connection_closer, result),
+                Ok(result) => (counter, connection_state, result),
                 Err(error) => {
-                    connection_closer.close_stream();
+                    connection_state.close_stream();
                     return Err(error.into());
                 }
             }
         };
         let address = net_location.to_hysteria2_str();
+        trace!("hy2: bi stream opened to {}", address);
         let tcp_request = VarInt::from_u64(0x401u64).map_err(|err| to_io_error(err.to_string()))?;
         let address_len =
             VarInt::from_u64(address.len() as u64).map_err(|err| to_io_error(err.to_string()))?;
-        let padding_len = VarInt::from_u64(0u64).map_err(|err| to_io_error(err.to_string()))?;
+
+        let random_padding_len: u16 = rand::thread_rng().gen_range(64..512);
+        let tcp_request_padding =
+            Alphanumeric.sample_string(&mut rand::thread_rng(), random_padding_len as usize);
+        let padding_len = VarInt::from_u64(random_padding_len as u64)
+            .map_err(|err| to_io_error(err.to_string()))?;
+
         let mut data = BytesMut::new();
         tcp_request.encode(&mut data);
         address_len.encode(&mut data);
         data.write_str(address.as_str())
             .map_err(|err| to_io_error(err.to_string()))?;
         padding_len.encode(&mut data);
+        data.write_str(tcp_request_padding.as_str())
+            .map_err(|err| to_io_error(err.to_string()))?;
 
         let result = send_stream.write(data.freeze().to_vec().as_slice()).await;
         match result {
-            Ok(_) => {}
+            Ok(_) => {
+                trace!("hy2: request written to {}", address);
+            }
             Err(err) => {
-                connection_closer.close_stream();
+                connection_state.close_stream();
                 return Err(err.into());
             }
         }
@@ -233,9 +252,11 @@ impl Outbound for HysteriaQuinnOutbound {
         let mut buffer = [0u8; 1];
         let result = receive_stream.read_exact(buffer.as_mut_slice()).await;
         match result {
-            Ok(_) => {}
+            Ok(_) => {
+                trace!("hy2: response status={} for {}", buffer[0], address);
+            }
             Err(err) => {
-                connection_closer.close_stream();
+                connection_state.close_stream();
                 return Err(Error::new(ErrorKind::BrokenPipe, err));
             }
         }
@@ -254,27 +275,28 @@ impl Outbound for HysteriaQuinnOutbound {
         match result {
             Ok(_) => {}
             Err(err) => {
-                connection_closer.close_stream();
+                connection_state.close_stream();
                 return Err(Error::new(ErrorKind::BrokenPipe, err));
             }
         }
-        let padding_len = decode(&mut receive_stream).await?;
-        let mut buffer: Vec<u8> = vec_allocate(padding_len.into_inner() as usize);
+        let resp_padding_len = decode(&mut receive_stream).await?;
+        let mut buffer: Vec<u8> = vec_allocate(resp_padding_len.into_inner() as usize);
         let result = receive_stream.read_exact(buffer.as_mut_slice()).await;
         match result {
             Ok(_) => {}
             Err(err) => {
-                connection_closer.close_stream();
+                connection_state.close_stream();
                 return Err(Error::new(ErrorKind::BrokenPipe, err));
             }
         }
+        let dial_elapsed = dial_start.elapsed();
+        info!("hy2: stream opened to {} in {:?}", address, dial_elapsed);
         Ok(Box::new(Hysteria2TcpStream {
             counter,
             address,
             send_stream,
             receive_stream,
             read_buffer: Default::default(),
-            write_buffer: Default::default(),
             read_closed: false,
         }))
     }

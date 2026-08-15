@@ -5,7 +5,7 @@ use crate::core::outbound::Outbound;
 use crate::core::statistics_manager::StatisticsManager;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::{ready, Sink, Stream};
+use futures::{Sink, Stream, ready};
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;

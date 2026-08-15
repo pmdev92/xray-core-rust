@@ -2,19 +2,37 @@
 name = "xray_bin"
 version = { workspace = true }
 edition = { workspace = true }
+default-run = "xray_bin"
 
 [[bin]]
 name = "xray_bin"
 path = "src/main.rs"
 
-[dependencies]
-xray_lib = { path = "../xray_lib" }
-ctrlc = "3.4.5"
-clap = "4.5.32"
-chrono = "0.4.33"
-colored = { version = "3.0.0", features = [] }
-crashreport = "1.0.1"
-log = { version = "0.4.29", features = ["std"] }
+[[bin]]
+name = "uniffi_bindgen"
+path = "src/bin/uniffi-bindgen.rs"
 
+[features]
+default = ["xray_bin"]
+xray_bin = [
+    "dep:xray_lib",
+    "dep:ctrlc",
+    "dep:clap",
+    "dep:chrono",
+    "dep:colored",
+    "dep:crashreport",
+    "dep:log",
+]
+uniffi_bindgen = ["dep:uniffi"]
+
+[dependencies]
+xray_lib = { path = "../xray_lib", optional = true }
+ctrlc = { version = "3.4.5", optional = true }
+clap = { version = "4.5.32", optional = true }
+chrono = { version = "0.4.33", optional = true }
+colored = { version = "3.0.0", features = [], optional = true }
+crashreport = { version = "1.0.1", optional = true }
+log = { version = "0.4.29", features = ["std"], optional = true }
+uniffi = { version = "0.30.0", features = ["cli"], optional = true }
 
 

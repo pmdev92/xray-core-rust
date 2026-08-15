@@ -5,6 +5,8 @@ use crate::config::config::Config;
 use crate::config::log::LogConfig;
 use crate::config::stats::StatsConfig;
 use crate::core::context::Context;
+#[cfg(target_os = "android")]
+pub use crate::core::context::android_platform::AndroidContext;
 use crate::core::dispatcher::Dispatcher;
 use crate::core::inbound::InboundTcp;
 use crate::core::sniffer::SnifferProtocol;
@@ -46,7 +48,13 @@ struct RuntimeSession {
     context: Arc<Context>,
 }
 
-pub fn start(id: u32, config_json: String, platform: Option<Box<dyn ContextPlatform>>) -> bool {
+pub fn start(
+    id: u32,
+    config_json: String,
+    #[cfg(target_os = "android")] platform: Box<
+        dyn crate::core::context::android_platform::AndroidContext,
+    >,
+) -> bool {
     let result = config::parse_config_json(config_json);
     let config = match result {
         Ok(config) => config,
@@ -55,13 +63,19 @@ pub fn start(id: u32, config_json: String, platform: Option<Box<dyn ContextPlatf
             return false;
         }
     };
-    let context = create_context(&config, platform);
-    let context = match context {
+    let context = create_context(
+        &config,
+        #[cfg(target_os = "android")]
+        platform,
+    );
+
+    let mut context = match context {
         None => {
             return false;
         }
         Some(context) => context,
     };
+
     let context_clone = context.clone();
 
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(32);
@@ -171,7 +185,9 @@ async fn start_core(config: Config, context: Arc<Context>) {
 
 fn create_context(
     config: &Config,
-    platform: Option<Box<dyn ContextPlatform>>,
+    #[cfg(target_os = "android")] platform: Box<
+        dyn crate::core::context::android_platform::AndroidContext,
+    >,
 ) -> Option<Arc<Context>> {
     let stats_enable = config
         .stats
@@ -232,10 +248,9 @@ fn create_context(
         }
     };
 
-    Some(Arc::new(Context::new(&config.memory, dispatcher, platform)))
-}
-
-pub trait ContextPlatform: Send + Sync {
-    fn android_protect_fd(&self, id: u64);
-    fn can_accept(&self) -> bool;
+    Some(Arc::new(Context::new(
+        dispatcher,
+        #[cfg(target_os = "android")]
+        platform,
+    )))
 }

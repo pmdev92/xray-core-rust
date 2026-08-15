@@ -2,9 +2,8 @@
 
 pub mod crash;
 mod logger;
-mod platform;
+mod version;
 
-use crate::platform::IosPlatform;
 use std::os::raw::c_char;
 use std::{env, ffi::CStr, thread};
 pub fn init_asset_path(path: String) {
@@ -16,8 +15,7 @@ pub unsafe extern "C" fn start_xray_core(id: u32, config: *const c_char) {
     let c_str = unsafe { CStr::from_ptr(config) };
     let config = c_str.to_str().unwrap().to_string();
     thread::spawn(move || {
-        let callback = IosPlatform::new();
-        xray_lib::start(id, config, Some(callback));
+        xray_lib::start(id, config);
     });
 }
 

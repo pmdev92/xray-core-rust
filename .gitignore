@@ -27,3 +27,4 @@ docs
 .idea/workspace.xml
 config.json
 *.dat
+.cargo/config.toml

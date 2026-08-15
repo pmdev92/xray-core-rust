@@ -53,7 +53,7 @@ impl UdpApi {
                     match res {
                         Ok(bytes) => self.clone().received_bytes(bytes).await,
                         Err(e) => {
-                            error!("hysteria2 read datagram error : {}", e);
+                            warn!("hysteria2 read datagram error : {}", e);
                             break e;
                         }
                     }

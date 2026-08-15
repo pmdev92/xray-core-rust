@@ -1,7 +1,7 @@
 use crate::common::address::Address;
-use crate::common::buffer_manager::BufferHandle;
 use crate::common::constants::MAX_UDP_BUFFER_CAPACITY;
 use crate::common::net_location::NetLocation;
+use crate::common::vec::vec_allocate;
 use crate::core::io::AsyncXrayUdpStream;
 use crate::core::transport::XrayTransport;
 use crate::outbound::socks5::protocol;
@@ -12,7 +12,7 @@ use std::io::ErrorKind;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 use tokio::io::ReadBuf;
 use tokio::net::UdpSocket;
 
@@ -20,26 +20,20 @@ pub(crate) struct Socks5UdpStream {
     stream: Box<dyn XrayTransport>,
     net_location: Arc<NetLocation>,
     udp_socket: UdpSocket,
-    buffer_manager: Box<dyn BufferHandle>,
     flushed: bool,
     data: Option<Bytes>,
 }
 impl Socks5UdpStream {
     pub async fn new(
-        context: Arc<crate::Context>,
+        _context: Arc<crate::Context>,
         net_location: Arc<NetLocation>,
         stream: Box<dyn XrayTransport>,
         udp_socket: UdpSocket,
     ) -> Result<Self, io::Error> {
-        let mut buffer_manager = context
-            .get_buffer_manager()
-            .get_buffer(MAX_UDP_BUFFER_CAPACITY)
-            .await?;
         Ok(Self {
             net_location,
             stream,
             udp_socket,
-            buffer_manager,
             flushed: true,
             data: None,
         })
@@ -50,12 +44,10 @@ impl Stream for Socks5UdpStream {
     type Item = Bytes;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let Self {
-            ref mut udp_socket,
-            ref mut buffer_manager,
-            ..
+            ref mut udp_socket, ..
         } = *self;
-        let buf_slice = buffer_manager.data();
-        let mut rb = ReadBuf::new(buf_slice);
+        let mut buf_slice = vec_allocate(MAX_UDP_BUFFER_CAPACITY);
+        let mut rb = ReadBuf::new(buf_slice.as_mut_slice());
         match ready!(udp_socket.poll_recv_from(cx, &mut rb)) {
             Ok(_src) => {
                 let sock_udp_packet = rb.filled().to_vec();

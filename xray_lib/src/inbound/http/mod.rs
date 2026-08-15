@@ -377,21 +377,8 @@ impl InboundTcp for HttpInbound {
                                 continue;
                             }
                         };
-                        if !context.can_accept() {
-                            warn!("platform reject accept new connection.");
-                            continue;
-                        }
-                        let session_manager = context.get_session_manager().add_new_session().await;
-                        let session_manager = match session_manager {
-                            Ok(session_manager) => Arc::new(session_manager),
-                            Err(err) => {
-                                warn!("{}", err);
-                                continue;
-                            }
-                        };
 
                         let session = Session::new(
-                            session_manager,
                             InboundProtocol::HTTP,
                             Network::Tcp,
                             socket.local_addr().ok(),

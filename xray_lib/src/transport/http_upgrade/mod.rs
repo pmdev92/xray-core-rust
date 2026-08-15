@@ -4,7 +4,7 @@ use std::io::ErrorKind;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 
 use crate::common::net_location::NetLocation;
 use crate::core::io::AsyncXrayTcpStream;
