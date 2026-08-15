@@ -25,29 +25,49 @@ jobs:
       - name: Install dependencies
         run: |
           cargo install cbindgen
+          brew untap aws/tap || true
           brew install llvm unzip protobuf
 
       - name: Build Apple
         run: |
           ./xray_scripts/apple_build.sh
 
-      - name: Zip artifacts
+      - name: Create ZIP archive and checksums
+        shell: bash
         run: |
           mv build/LibXrayCoreRust.xcframework .
-          zip -r LibXrayCoreRust.xcframework.zip LibXrayCoreRust.xcframework
+
+          touch -mt $(date +%Y%m%d0000) LibXrayCoreRust.xcframework
+
+          FILE=LibXrayCoreRust.xcframework.zip
+          zip -9vr "$FILE" LibXrayCoreRust.xcframework
+
+          DGST=$FILE.dgst
+
+          for METHOD in {"md5","sha1","sha256","sha512"}
+          do
+            openssl dgst -$METHOD "$FILE" | sed 's/([^)]*)//g' >>"$DGST"
+          done
+
+          echo "ASSET_ZIP=$FILE" >> $GITHUB_ENV
+          echo "ASSET_DGST=$DGST" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: LibXrayCoreRust.xcframework.zip
-          path: LibXrayCoreRust.xcframework.zip
+          name: LibXrayCoreRust.xcframework
+          path: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
 
       - name: Upload Apple library to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: LibXrayCoreRust.xcframework.zip
+          files: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -70,7 +90,7 @@ jobs:
           cargo install cbindgen
 
           sudo apt update
-          sudo apt install -y make llvm-dev libclang-dev clang pkg-config unzip curl default-jdk build-essential libssl-dev
+          sudo apt install -y make llvm-dev libclang-dev clang pkg-config unzip curl default-jdk build-essential libssl-dev zip openssl
 
           export ANDROID_HOME=/tmp/Android/sdk
           export NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
@@ -96,22 +116,41 @@ jobs:
 
           ./xray_scripts/android_build.sh all
 
-      - name: Zip artifacts
+      - name: Create ZIP archive and checksums
+        shell: bash
         run: |
           mv build/LibXrayCoreRust.aar .
-          zip -r LibXrayCoreRust.aar.zip LibXrayCoreRust.aar
+
+          touch -mt $(date +%Y%m%d0000) LibXrayCoreRust.aar
+
+          FILE=LibXrayCoreRust.aar.zip
+          zip -9vr "$FILE" LibXrayCoreRust.aar
+
+          DGST=$FILE.dgst
+
+          for METHOD in {"md5","sha1","sha256","sha512"}
+          do
+            openssl dgst -$METHOD "$FILE" | sed 's/([^)]*)//g' >>"$DGST"
+          done
+
+          echo "ASSET_ZIP=$FILE" >> $GITHUB_ENV
+          echo "ASSET_DGST=$DGST" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: LibXrayCoreRust.aar.zip
-          path: LibXrayCoreRust.aar.zip
+          name: LibXrayCoreRust.aar
+          path: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
 
       - name: Upload Android library to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: LibXrayCoreRust.aar.zip
+          files: |
+            ${{ env.ASSET_ZIP }}
+            ${{ env.ASSET_DGST }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
