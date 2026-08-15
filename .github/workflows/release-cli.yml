@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build-cli:
+  build-linux-windows:
     name: Build CLI - ${{ matrix.target }}
     runs-on: ubuntu-latest
 
@@ -21,8 +21,6 @@ jobs:
           - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-musl
           - x86_64-pc-windows-gnu
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
 
     steps:
       - name: Checkout repository
@@ -82,5 +80,62 @@ jobs:
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: ${{ env.ASSET_FILE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    name: Build CLI - ${{ matrix.target }}
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          brew install llvm protobuf
+
+      - name: Add target
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Build Rust
+        run: |
+          export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
+          export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
+          cargo build --release --target ${{ matrix.target }} -p xray_bin
+
+      - name: Rename binary
+        run: |
+          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          gzip -c xray_bin-${{ matrix.target }} > xray_bin-${{ matrix.target }}.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray_bin-${{ matrix.target }}.gz
+          path: xray_bin-${{ matrix.target }}.gz
+
+      - name: Upload macOS asset to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: xray_bin-${{ matrix.target }}.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
