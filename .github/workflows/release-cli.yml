@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -69,7 +69,7 @@ jobs:
           echo "ASSET_FILE=xray_bin-${{ matrix.target }}.gz" >> $GITHUB_ENV
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ASSET_FILE }}
           path: ${{ env.ASSET_FILE }}
@@ -96,7 +96,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -126,7 +126,7 @@ jobs:
           gzip -c xray_bin-${{ matrix.target }} > xray_bin-${{ matrix.target }}.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: xray_bin-${{ matrix.target }}.gz
           path: xray_bin-${{ matrix.target }}.gz

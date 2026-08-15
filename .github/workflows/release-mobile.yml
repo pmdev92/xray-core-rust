@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -37,10 +37,19 @@ jobs:
           zip -r LibXrayCoreRust.xcframework.zip LibXrayCoreRust.xcframework
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LibXrayCoreRust.xcframework.zip
           path: LibXrayCoreRust.xcframework.zip
+
+      - name: Upload Apple library to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: LibXrayCoreRust.xcframework.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-lib-android:
     name: Build Android Library
@@ -48,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
           lfs: true
@@ -93,34 +102,16 @@ jobs:
           zip -r LibXrayCoreRust.aar.zip LibXrayCoreRust.aar
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LibXrayCoreRust.aar.zip
           path: LibXrayCoreRust.aar.zip
 
-  upload-mobile-release:
-    name: Upload mobile libraries to release
-    needs:
-      - build-lib-apple
-      - build-lib-android
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download mobile artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Prepare mobile release assets
-        run: |
-          mkdir -p release-assets
-          find dist -type f \( -name "LibXrayCoreRust.xcframework.zip" -o -name "LibXrayCoreRust.aar.zip" \) -exec cp {} release-assets/ \;
-          ls -lah release-assets
-
-      - name: Upload mobile assets to GitHub Release
+      - name: Upload Android library to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: release-assets/*
+          files: LibXrayCoreRust.aar.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
