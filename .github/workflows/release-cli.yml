@@ -1,4 +1,4 @@
-name: Xray Core Rust Build And Release CLI
+name: Build And Release CLI
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build-linux-windows:
+  build-cli:
     name: Build CLI - ${{ matrix.target }}
     runs-on: ubuntu-latest
 
@@ -21,6 +21,8 @@ jobs:
           - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-musl
           - x86_64-pc-windows-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
 
     steps:
       - name: Checkout repository
@@ -60,98 +62,25 @@ jobs:
         if: ${{ contains(matrix.target, 'windows') }}
         run: |
           zip -9 xray_bin-${{ matrix.target }}.zip xray_bin-${{ matrix.target }}.exe
+          echo "ASSET_FILE=xray_bin-${{ matrix.target }}.zip" >> $GITHUB_ENV
 
       - name: Package Unix binary
         if: ${{ !contains(matrix.target, 'windows') }}
         run: |
-          gzip -k xray_bin-${{ matrix.target }}
-
-      - name: Upload Windows artifact
-        if: ${{ contains(matrix.target, 'windows') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: xray_bin-${{ matrix.target }}.zip
-          path: xray_bin-${{ matrix.target }}.zip
-
-      - name: Upload Unix artifact
-        if: ${{ !contains(matrix.target, 'windows') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: xray_bin-${{ matrix.target }}.gz
-          path: xray_bin-${{ matrix.target }}.gz
-
-  build-macos:
-    name: Build CLI - ${{ matrix.target }}
-    runs-on: macos-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - aarch64-apple-darwin
-          - x86_64-apple-darwin
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: |
-          brew install llvm protobuf
-
-      - name: Add target
-        run: |
-          rustup target add ${{ matrix.target }}
-
-      - name: Build Rust
-        run: |
-          export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
-          export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
-          cargo build --release --target ${{ matrix.target }} -p xray_bin
-
-      - name: Rename binary
-        run: |
-          mv target/${{ matrix.target }}/release/xray_bin xray_bin-${{ matrix.target }}
-
-      - name: Package binary
-        run: |
-          gzip -k xray_bin-${{ matrix.target }}
+          gzip -c xray_bin-${{ matrix.target }} > xray_bin-${{ matrix.target }}.gz
+          echo "ASSET_FILE=xray_bin-${{ matrix.target }}.gz" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xray_bin-${{ matrix.target }}.gz
-          path: xray_bin-${{ matrix.target }}.gz
+          name: ${{ env.ASSET_FILE }}
+          path: ${{ env.ASSET_FILE }}
 
-  upload-cli-release:
-    name: Upload CLI assets to release
-    if: github.event_name == 'release'
-    needs:
-      - build-linux-windows
-      - build-macos
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download CLI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Prepare CLI release assets
-        run: |
-          mkdir -p release-assets
-          find dist -type f \( -name "xray_bin-*.gz" -o -name "xray_bin-*.zip" \) -exec cp {} release-assets/ \;
-          ls -lah release-assets
-
-      - name: Upload CLI assets to GitHub Release
+      - name: Upload asset to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: release-assets/*
+          files: ${{ env.ASSET_FILE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

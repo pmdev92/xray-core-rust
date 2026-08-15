@@ -1,4 +1,4 @@
-name: Xray Core Rust Build And Release CLI Mobile Libraries
+name: Build And Release Mobile Libraries
 
 on:
   release:
