@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicU64, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicU64};
 use tokio::time::Instant;
 
 pub struct StatisticsManager {

@@ -1,7 +1,7 @@
 use tls_parser::TlsMessage::Handshake;
 use tls_parser::{
-    parse_tls_client_hello_extensions, parse_tls_plaintext, SNIType, TlsExtension,
-    TlsMessageHandshake,
+    SNIType, TlsExtension, TlsMessageHandshake, parse_tls_client_hello_extensions,
+    parse_tls_plaintext,
 };
 
 use crate::core::sniffer::{SniffProtocol, SniffResult, SnifferProtocol};

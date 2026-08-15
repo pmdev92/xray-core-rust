@@ -3,14 +3,14 @@ use s2n_quic_core::connection::id::ConnectionInfo;
 use s2n_quic_core::crypto::InitialKey;
 use s2n_quic_core::frame::{Frame, FrameMut};
 use s2n_quic_core::inet::SocketAddress;
-use s2n_quic_core::packet::interceptor::DecoderBufferMut;
-use s2n_quic_core::packet::number::PacketNumberSpace;
 use s2n_quic_core::packet::ProtectedPacket;
 use s2n_quic_core::packet::ProtectedPacket::Initial;
+use s2n_quic_core::packet::interceptor::DecoderBufferMut;
+use s2n_quic_core::packet::number::PacketNumberSpace;
 use tls_parser::TlsMessage::Handshake;
 use tls_parser::{
-    parse_tls_client_hello_extensions, parse_tls_message_handshake, SNIType, TlsExtension,
-    TlsMessageHandshake,
+    SNIType, TlsExtension, TlsMessageHandshake, parse_tls_client_hello_extensions,
+    parse_tls_message_handshake,
 };
 
 use crate::core::sniffer::{SniffProtocol, SniffResult, SnifferProtocol};

@@ -1,6 +1,6 @@
+use aes::Aes128;
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
-use aes::Aes128;
 
 pub trait BlockCipherHelper {
     fn new_with_slice(key: &[u8]) -> Self;

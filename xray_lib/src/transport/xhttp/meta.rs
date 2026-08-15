@@ -4,8 +4,8 @@ use crate::transport::xhttp::padding::XPaddingSettings;
 use crate::transport::xhttp::protocol::{
     PLACEMENT_COOKIE, PLACEMENT_HEADER, PLACEMENT_PATH, PLACEMENT_QUERY, USER_AGENT,
 };
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use http::request::Builder;
 use http::{HeaderName, HeaderValue};
 use rand::Rng;
@@ -19,18 +19,28 @@ pub fn apply_session_to_request(
     session_placement: &str,
     session_key: &str,
 ) -> Builder {
-    if session_id.is_empty() { return builder; }
+    if session_id.is_empty() {
+        return builder;
+    }
     match session_placement {
-        PLACEMENT_PATH => { url_builder.append_path(session_id); builder }
-        PLACEMENT_QUERY => { url_builder.query(session_key, session_id); builder }
+        PLACEMENT_PATH => {
+            url_builder.append_path(session_id);
+            builder
+        }
+        PLACEMENT_QUERY => {
+            url_builder.query(session_key, session_id);
+            builder
+        }
         PLACEMENT_HEADER => builder.header(
             session_key,
             HeaderValue::from_str(session_id).unwrap_or(HeaderValue::from_static("")),
         ),
         PLACEMENT_COOKIE => {
             let cookie = format!("{}={}", session_key, session_id);
-            builder.header("Cookie",
-                HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")))
+            builder.header(
+                "Cookie",
+                HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")),
+            )
         }
         _ => builder,
     }
@@ -43,18 +53,28 @@ pub fn apply_seq_to_request(
     placement: &str,
     key: &str,
 ) -> Builder {
-    if seq.is_empty() { return builder; }
+    if seq.is_empty() {
+        return builder;
+    }
     match placement {
-        PLACEMENT_PATH => { url_builder.append_path(seq); builder }
-        PLACEMENT_QUERY => { url_builder.query(key, seq); builder }
+        PLACEMENT_PATH => {
+            url_builder.append_path(seq);
+            builder
+        }
+        PLACEMENT_QUERY => {
+            url_builder.query(key, seq);
+            builder
+        }
         PLACEMENT_HEADER => builder.header(
             key,
             HeaderValue::from_str(seq).unwrap_or(HeaderValue::from_static("")),
         ),
         PLACEMENT_COOKIE => {
             let cookie = format!("{}={}", key, seq);
-            builder.header("Cookie",
-                HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")))
+            builder.header(
+                "Cookie",
+                HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")),
+            )
         }
         _ => builder,
     }
@@ -72,7 +92,9 @@ pub fn apply_data_to_headers(
     let mut i = 0;
     let mut rng = rand::thread_rng();
     while !remaining.is_empty() {
-        let chunk_size = rng.gen_range(chunk_size_min..=chunk_size_max).min(remaining.len());
+        let chunk_size = rng
+            .gen_range(chunk_size_min..=chunk_size_max)
+            .min(remaining.len());
         let (chunk, rest) = remaining.split_at(chunk_size);
         remaining = rest;
         let header_key = format!("{}-{}", key, i);
@@ -97,13 +119,17 @@ pub fn apply_data_to_cookies(
     let mut i = 0;
     let mut rng = rand::thread_rng();
     while !remaining.is_empty() {
-        let chunk_size = rng.gen_range(chunk_size_min..=chunk_size_max).min(remaining.len());
+        let chunk_size = rng
+            .gen_range(chunk_size_min..=chunk_size_max)
+            .min(remaining.len());
         let (chunk, rest) = remaining.split_at(chunk_size);
         remaining = rest;
         let cookie_val = format!("{}_{}", key, i);
         let cookie = format!("{}={}", cookie_val, chunk);
-        builder = builder.header("Cookie",
-            HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")));
+        builder = builder.header(
+            "Cookie",
+            HeaderValue::from_str(&cookie).unwrap_or(HeaderValue::from_static("")),
+        );
         i += 1;
     }
     builder
@@ -151,7 +177,13 @@ pub fn build_request(
         }
     }
 
-    builder = apply_session_to_request(builder, &mut url_builder, session_id, session_placement, session_key);
+    builder = apply_session_to_request(
+        builder,
+        &mut url_builder,
+        session_id,
+        session_placement,
+        session_key,
+    );
     builder = padding::apply_padding_to_request(builder, &mut url_builder, padding_settings);
     builder = builder.uri(url_builder.get_uri());
     builder
@@ -193,7 +225,13 @@ pub fn build_packet_request(
         }
     }
 
-    builder = apply_session_to_request(builder, &mut url_builder, session_id, session_placement, session_key);
+    builder = apply_session_to_request(
+        builder,
+        &mut url_builder,
+        session_id,
+        session_placement,
+        session_key,
+    );
     builder = apply_seq_to_request(builder, &mut url_builder, seq_str, seq_placement, seq_key);
     builder = padding::apply_padding_to_request(builder, &mut url_builder, padding_settings);
     builder = builder.uri(url_builder.get_uri());

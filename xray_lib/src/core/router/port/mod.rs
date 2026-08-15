@@ -20,14 +20,12 @@ impl Apply for PortMatcher {
 
 impl PortMatcher {
     pub fn new(rules: String) -> Self {
-       let rules= parse_u16_list(rules);
-        Self {
-            ports:rules,
-        }
+        let rules = parse_u16_list(rules);
+        Self { ports: rules }
     }
 }
 
-fn parse_u16_list(input:String) -> Vec<u16> {
+fn parse_u16_list(input: String) -> Vec<u16> {
     fn inner(input: String) -> Result<Vec<u16>, ()> {
         let mut set = BTreeSet::new();
 

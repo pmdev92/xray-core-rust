@@ -5,8 +5,8 @@ use crate::transport::xhttp::protocol::{
     PLACEMENT_COOKIE, PLACEMENT_HEADER, PLACEMENT_QUERY, PLACEMENT_QUERY_IN_HEADER,
     VALIDATION_TOLERANCE, XHTTP_PADDING_MAX, XHTTP_PADDING_MIN,
 };
-use http::request::Builder;
 use http::HeaderValue;
+use http::request::Builder;
 use rand::Rng;
 
 #[derive(Debug, Clone)]
@@ -47,7 +47,11 @@ pub fn generate_padding(method: &str, length: usize) -> String {
     match method {
         METHOD_TOKENISH => {
             let result = generate_tokenish_padding_base62(length);
-            if result.is_empty() { "X".repeat(length) } else { result }
+            if result.is_empty() {
+                "X".repeat(length)
+            } else {
+                result
+            }
         }
         _ => "X".repeat(length),
     }
@@ -78,7 +82,9 @@ fn generate_tokenish_padding_base62(target_huffman_bytes: usize) -> String {
             result.push(adjust_char as char);
             adjust_char = if adjust_char == b'X' { b'Z' } else { b'X' };
         } else {
-            if result.len() <= 1 { return result; }
+            if result.len() <= 1 {
+                return result;
+            }
             result.pop();
         }
     }

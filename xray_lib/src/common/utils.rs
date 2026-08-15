@@ -32,7 +32,7 @@ pub fn get_address_and_port_len(buffer: &[u8]) -> Result<usize, io::Error> {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
                 "the buffer is not valid socks address and port buffer",
-            ))
+            ));
         }
     }
     len = 1 + address_len + 2;

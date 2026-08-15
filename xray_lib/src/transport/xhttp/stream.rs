@@ -68,10 +68,14 @@ impl AsyncWrite for XHttpStream {
         if self.future_write.is_none() {
             let future = self.upload.clone();
             let buffer = buf.to_vec();
-            let handle = Box::pin(async move { let _ = future.send(buffer).await; });
+            let handle = Box::pin(async move {
+                let _ = future.send(buffer).await;
+            });
             self.future_write = Some(handle);
         }
-        let future = self.future_write.as_mut()
+        let future = self
+            .future_write
+            .as_mut()
             .ok_or_else(|| Error::new(ErrorKind::Other, "future write not set"))?;
         let _ = std::task::ready!(Pin::new(future).poll(cx));
         self.future_write = None;
@@ -85,10 +89,14 @@ impl AsyncWrite for XHttpStream {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         if self.future_write.is_none() {
             let future = self.upload.clone();
-            let handle = Box::pin(async move { let _ = future.send(vec![]).await; });
+            let handle = Box::pin(async move {
+                let _ = future.send(vec![]).await;
+            });
             self.future_write = Some(handle);
         }
-        let future = self.future_write.as_mut()
+        let future = self
+            .future_write
+            .as_mut()
             .ok_or_else(|| Error::new(ErrorKind::Other, "future write not set"))?;
         let _ = std::task::ready!(Pin::new(future).poll(cx));
         self.future_write = None;

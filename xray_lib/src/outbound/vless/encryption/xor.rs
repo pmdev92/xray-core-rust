@@ -1,5 +1,5 @@
-use aes::cipher::{KeyIvInit, StreamCipher};
 use aes::Aes256;
+use aes::cipher::{KeyIvInit, StreamCipher};
 use blake3;
 
 type Aes256Ctr = ctr::Ctr128BE<Aes256>;

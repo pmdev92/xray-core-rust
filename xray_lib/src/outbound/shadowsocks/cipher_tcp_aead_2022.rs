@@ -3,8 +3,8 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aes::cipher::generic_array::GenericArray;
 use aes::cipher::BlockEncrypt;
+use aes::cipher::generic_array::GenericArray;
 use aes::{Aes128, Aes256};
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, Key, KeyInit, Nonce};
@@ -14,8 +14,8 @@ use rand::Rng;
 use tls_parser::nom::AsBytes;
 
 use crate::outbound::shadowsocks::protocol::{
-    generate_iv, ss2022_password_to_key, ss2022_sub_key, to_io_error, Cipher, DecodeResult,
-    PacketLen,
+    Cipher, DecodeResult, PacketLen, generate_iv, ss2022_password_to_key, ss2022_sub_key,
+    to_io_error,
 };
 
 const MAX_PAYLOAD_LEN: usize = 65535;

@@ -4,8 +4,8 @@ use crate::transport::xhttp::http_unify::HttpUnify;
 use lazy_static::lazy_static;
 use rand::Rng;
 use std::io::Error;
-use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
@@ -44,13 +44,21 @@ pub struct XmuxClient {
 
 impl XmuxClient {
     pub fn is_usable(&self) -> bool {
-        if self.conn.is_closed_unify() { return false; }
-        if let Some(left_usage) = self.left_usage.as_ref() {
-            if left_usage.load(Ordering::Relaxed) <= 0 { return false; }
+        if self.conn.is_closed_unify() {
+            return false;
         }
-        if self.left_requests.load(Ordering::Relaxed) <= 0 { return false; }
+        if let Some(left_usage) = self.left_usage.as_ref() {
+            if left_usage.load(Ordering::Relaxed) <= 0 {
+                return false;
+            }
+        }
+        if self.left_requests.load(Ordering::Relaxed) <= 0 {
+            return false;
+        }
         if let Some(at) = self.unreusable_at {
-            if Instant::now() > at { return false; }
+            if Instant::now() > at {
+                return false;
+            }
         }
         true
     }
@@ -68,19 +76,29 @@ pub struct XmuxSettings {
 impl XmuxSettings {
     pub fn from_config(c: &XmuxConfig) -> Self {
         Self {
-            max_concurrency: c.max_concurrency.as_ref()
+            max_concurrency: c
+                .max_concurrency
+                .as_ref()
                 .map(|r| r.random() as i32)
                 .unwrap_or(DEFAULT_MAX_CONCURRENCY.random() as i32),
-            max_connections: c.max_connections.as_ref()
+            max_connections: c
+                .max_connections
+                .as_ref()
                 .map(|r| r.random() as i32)
                 .unwrap_or(0),
-            c_max_reuse_times: c.c_max_reuse_times.as_ref()
+            c_max_reuse_times: c
+                .c_max_reuse_times
+                .as_ref()
                 .map(|r| r.random() as i32)
                 .unwrap_or(-1),
-            h_max_request_times: c.h_max_request_times.as_ref()
+            h_max_request_times: c
+                .h_max_request_times
+                .as_ref()
                 .map(|r| r.random() as i32)
                 .unwrap_or(DEFAULT_H_MAX_REUSABLE_SECS.random() as i32),
-            h_max_reusable_secs: c.h_max_reusable_secs.as_ref()
+            h_max_reusable_secs: c
+                .h_max_reusable_secs
+                .as_ref()
                 .map(|r| r.random() as i32)
                 .unwrap_or(DEFAULT_H_MAX_REUSABLE_SECS.random() as i32),
         }
@@ -181,20 +199,27 @@ impl XmuxManager {
 
     fn get_available_client(&mut self) -> Option<Arc<XmuxClient>> {
         self.clients.retain(|c| c.is_usable());
-        if self.clients.is_empty() { return None; }
+        if self.clients.is_empty() {
+            return None;
+        }
         if self.config.max_connections > 0
             && (self.clients.len() as i32) < self.config.max_connections
         {
             return None;
         }
         let available: Vec<&Arc<XmuxClient>> = if self.config.max_concurrency > 0 {
-            self.clients.iter()
-                .filter(|c| c.open_usage.load(Ordering::Relaxed) < self.config.max_concurrency as u32)
+            self.clients
+                .iter()
+                .filter(|c| {
+                    c.open_usage.load(Ordering::Relaxed) < self.config.max_concurrency as u32
+                })
                 .collect()
         } else {
             self.clients.iter().collect()
         };
-        if available.is_empty() { return None; }
+        if available.is_empty() {
+            return None;
+        }
         let idx = rand::thread_rng().gen_range(0..available.len());
         Some(available[idx].clone())
     }

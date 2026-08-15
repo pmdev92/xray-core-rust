@@ -1,9 +1,9 @@
 use crate::common::constants::MAX_UDP_BUFFER_CAPACITY;
 use crate::common::net_location::NetLocation;
+use crate::outbound::quinn_tuic::protocol::ToCommand;
 use crate::outbound::quinn_tuic::protocol::dissociate::Dissociate;
 use crate::outbound::quinn_tuic::protocol::enums::UdpRelayMode;
 use crate::outbound::quinn_tuic::protocol::packet::{Packet, PacketDeFragmenter};
-use crate::outbound::quinn_tuic::protocol::ToCommand;
 use crate::outbound::quinn_tuic::to_io_error;
 use bytes::Bytes;
 use log::{error, info, warn};

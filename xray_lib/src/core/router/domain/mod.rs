@@ -1,14 +1,14 @@
-use std::env;
-use std::path::{Path, PathBuf};
+use crate::common::asset::get_asset_location;
 use crate::core::router::domain::full_domain_matcher::FullDomainMatcher;
 use crate::core::router::domain::geo_domain_matcher::GeoDomainMatcher;
 use crate::core::router::domain::partial_matcher::PartialMatcher;
 use crate::core::router::domain::regular_expression_matcher::RegularExpressionMatcher;
 use crate::core::router::domain::sub_domain_matcher::SubDomainMatcher;
 use crate::core::router::{Apply, RouteLocation};
-use std::sync::Arc;
 use log::warn;
-use crate::common::asset::get_asset_location;
+use std::env;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 mod full_domain_matcher;
 mod geo_domain_matcher;
@@ -51,7 +51,7 @@ impl DomainMatcher {
             if rule.starts_with("geo:") {
                 let geo = rule.replace("geo:", "").clone();
                 let geo = geo.split(",").collect::<Vec<&str>>();
-                if geo.len()<1 || geo.len()>2 {
+                if geo.len() < 1 || geo.len() > 2 {
                     warn!("router rule domain `{}` parse error", rule);
                     continue;
                 }
@@ -59,16 +59,16 @@ impl DomainMatcher {
                 let mut code = "";
 
                 if geo.len() == 1 {
-                     file = "geosite.dat";
-                     code = geo[0];
-                }else if geo.len() == 2 {
-                     file = geo[0];
-                     code = geo[1];
+                    file = "geosite.dat";
+                    code = geo[0];
+                } else if geo.len() == 2 {
+                    file = geo[0];
+                    code = geo[1];
                 }
 
                 let path = if Path::new(file).is_relative() {
                     get_asset_location(file).to_string_lossy().into_owned()
-                }else {
+                } else {
                     file.to_string()
                 };
 
@@ -96,5 +96,3 @@ impl DomainMatcher {
         Self { matchers: rules }
     }
 }
-
-

@@ -3,12 +3,12 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use log::warn;
 use crate::common::asset::get_asset_location;
 use crate::common::geo;
 use crate::core::router::ip::cidr_matcher::CidrMatcher;
 use crate::core::router::ip::geo_ip_matcher::{GeoIPCIDRIter, GeoIpMatcher};
 use crate::core::router::{Apply, RouteLocation};
+use log::warn;
 
 mod cidr_matcher;
 mod geo_ip_matcher;
@@ -35,7 +35,7 @@ impl IpMatcher {
             if rule.contains("geo:") {
                 let geo = rule.replace("geo:", "").clone();
                 let geo = geo.split(",").collect::<Vec<&str>>();
-                if geo.len()<1 || geo.len()>2 {
+                if geo.len() < 1 || geo.len() > 2 {
                     warn!("router rule domain `{}` parse error", rule);
                     continue;
                 }
@@ -45,14 +45,14 @@ impl IpMatcher {
                 if geo.len() == 1 {
                     file = "geoip.dat";
                     code = geo[0];
-                }else if geo.len() == 2 {
+                } else if geo.len() == 2 {
                     file = geo[0];
                     code = geo[1];
                 }
 
                 let path = if Path::new(file).is_relative() {
                     get_asset_location(file).to_string_lossy().into_owned()
-                }else {
+                } else {
                     file.to_string()
                 };
 

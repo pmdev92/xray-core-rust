@@ -80,7 +80,7 @@ impl Apply for GeoIpMatcher {
     }
 }
 use crate::core::router::ip::cidr_matcher::CidrMatcher;
-use crate::protos::router::{Domain, GeoSite, GeoSiteList, CIDR};
+use crate::protos::router::{CIDR, Domain, GeoSite, GeoSiteList};
 use byteorder::ReadBytesExt;
 use bytes::Buf;
 use log::{error, warn};

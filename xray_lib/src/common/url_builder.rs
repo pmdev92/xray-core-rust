@@ -108,7 +108,11 @@ impl UrlBuilder {
         self.query_params
             .iter()
             .map(|(k, v)| {
-                if v.is_empty() { k.clone() } else { format!("{}={}", k, v) }
+                if v.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{}={}", k, v)
+                }
             })
             .collect::<Vec<_>>()
             .join("&")

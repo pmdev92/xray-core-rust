@@ -48,7 +48,11 @@ impl AsyncRead for Hysteria2TcpStream {
                         self.read_closed = true;
                         return Poll::Ready(Ok(()));
                     }
-                    log::trace!("hy2 tcp read: {} bytes addr={}", buffer.filled().len(), self.address);
+                    log::trace!(
+                        "hy2 tcp read: {} bytes addr={}",
+                        buffer.filled().len(),
+                        self.address
+                    );
                     self.read_buffer.extend_from_slice(buffer.filled());
                     continue;
                 }

@@ -11,7 +11,11 @@ impl UIntRange {
     pub fn new(min: usize, max: Option<usize>) -> Self {
         let max = match max {
             Some(max) => {
-                if max < min { Some(min) } else { Some(max) }
+                if max < min {
+                    Some(min)
+                } else {
+                    Some(max)
+                }
             }
             None => Some(min),
         };
@@ -25,14 +29,20 @@ impl UIntRange {
         }
     }
 
-    pub fn min(&self) -> usize { self.min }
+    pub fn min(&self) -> usize {
+        self.min
+    }
 
-    pub fn max(&self) -> usize { self.max.unwrap_or(self.min) }
+    pub fn max(&self) -> usize {
+        self.max.unwrap_or(self.min)
+    }
 }
 
 impl<'de> Deserialize<'de> for UIntRange {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let s = String::deserialize(deserializer)?;
         let mut parts = s.split(['-', ':', '_', ',']);
         let min = parts
@@ -53,7 +63,9 @@ impl<'de> Deserialize<'de> for UIntRange {
 
 impl Serialize for UIntRange {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         match self.max {
             Some(max) => serializer.serialize_str(&format!("{}-{}", self.min, max)),
             None => serializer.serialize_str(&self.min.to_string()),

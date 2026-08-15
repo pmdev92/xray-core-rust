@@ -1,8 +1,8 @@
 use std::io;
 use std::sync::Arc;
 
-use aes::cipher::consts::U12;
 use aes::Aes192;
+use aes::cipher::consts::U12;
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, AesGcm, Key, KeyInit, Nonce};
 use bytes::BytesMut;
@@ -11,7 +11,7 @@ use tls_parser::nom::AsBytes;
 
 use crate::common::vec::vec_allocate;
 use crate::outbound::shadowsocks::protocol::{
-    generate_iv, ss_password_to_key, ss_sub_key, to_io_error, Cipher, DecodeResult, PacketLen,
+    Cipher, DecodeResult, PacketLen, generate_iv, ss_password_to_key, ss_sub_key, to_io_error,
 };
 
 const MAX_PAYLOAD_LEN: usize = 16383;

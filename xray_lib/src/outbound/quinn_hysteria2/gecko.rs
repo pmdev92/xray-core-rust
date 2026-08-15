@@ -1,18 +1,18 @@
-use crate::outbound::quinn_hysteria2::salamander::{Salamander, SALAMANDER_SALT_SIZE};
+use crate::outbound::quinn_hysteria2::salamander::{SALAMANDER_SALT_SIZE, Salamander};
 use bytes::{BufMut, Bytes, BytesMut};
 use parking_lot::Mutex;
-use parking_lot::lock_api::MutexGuard;
 use parking_lot::RawMutex;
-use quinn::udp::{RecvMeta, Transmit};
+use parking_lot::lock_api::MutexGuard;
 use quinn::AsyncUdpSocket;
+use quinn::udp::{RecvMeta, Transmit};
 use rand::rngs::OsRng;
 use rand::{Rng, RngCore};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::IoSliceMut;
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
     Arc, OnceLock,
+    atomic::{AtomicU32, Ordering},
 };
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -157,7 +157,11 @@ impl Gecko {
             if start >= packet.len() {
                 break;
             }
-            let end = if i < chunks - 1 { start + chunk_size } else { packet.len() };
+            let end = if i < chunks - 1 {
+                start + chunk_size
+            } else {
+                packet.len()
+            };
             let chunk = &packet[start..end];
             let pad = self.random_pad_len(chunk.len());
             if let Some(frame) = self.encode_frame(msg_id, i as u8, chunks as u8, pad, chunk) {
@@ -316,7 +320,11 @@ impl AsyncUdpSocket for Gecko {
             return self.salamander.try_send(tx);
         }
         let packets = self.fragment(tx.contents);
-        log::trace!("gecko: fragmenting {} bytes into {} chunks", tx.contents.len(), packets.len());
+        log::trace!(
+            "gecko: fragmenting {} bytes into {} chunks",
+            tx.contents.len(),
+            packets.len()
+        );
         let mut transmit = tx.to_owned();
         for packet in &packets {
             transmit.contents = packet;
@@ -341,7 +349,11 @@ impl AsyncUdpSocket for Gecko {
                     if out >= bufs.len() {
                         break;
                     }
-                    log::trace!("gecko: reassembled packet {} bytes from {}", pkt.len(), addr);
+                    log::trace!(
+                        "gecko: reassembled packet {} bytes from {}",
+                        pkt.len(),
+                        addr
+                    );
                     let dst = &mut bufs[out];
                     let copy = pkt.len().min(dst.len());
                     dst[..copy].copy_from_slice(&pkt[..copy]);

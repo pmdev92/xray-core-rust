@@ -1,6 +1,6 @@
 use aes::cipher::generic_array::typenum::Unsigned;
 pub use aes_gcm::Aes128Gcm;
-use aes_gcm::{aead::Tag, AeadInPlace, KeyInit};
+use aes_gcm::{AeadInPlace, KeyInit, aead::Tag};
 pub use chacha20poly1305::ChaCha20Poly1305;
 
 pub trait AeadCipherHelper: AeadInPlace {

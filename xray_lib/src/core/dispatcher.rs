@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::common::net_location::NetLocation;
 use crate::core::outbound::Outbound;
-use crate::core::router::router::Router;
 use crate::core::router::RouteLocation;
+use crate::core::router::router::Router;
 use crate::core::session::Session;
 use crate::core::statistics_manager::StatisticsManager;
 use crate::outbound::stats::StatisticsOutbound;

@@ -1,0 +1,39 @@
+name: Validate And Test Project
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate And Test Project
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y llvm-dev libclang-dev clang pkg-config libssl-dev protobuf-compiler make build-essential
+
+      - name: Check formatting
+        run: |
+          cargo fmt --all -- --check
+
+      - name: Check project
+        run: |
+          cargo check --workspace --all-targets
+
+      - name: Run tests
+        run: |
+          cargo test --workspace

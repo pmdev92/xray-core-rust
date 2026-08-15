@@ -8,12 +8,13 @@ use aes::BlockCipherHelper;
 
 use crate::outbound::vmess::aead::helper::AeadCipherHelper;
 use crate::outbound::vmess::kdf::{
-    vmess_kdf_1_one_shot, vmess_kdf_3_one_shot, KDF_SALT_CONST_AUTH_ID_ENCRYPTION_KEY,
-    KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_AEAD_IV, KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_AEAD_KEY,
+    KDF_SALT_CONST_AUTH_ID_ENCRYPTION_KEY, KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_AEAD_IV,
+    KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_AEAD_KEY,
     KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_IV,
-    KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_KEY,
+    KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_KEY, vmess_kdf_1_one_shot,
+    vmess_kdf_3_one_shot,
 };
-use crate::outbound::vmess::protocol::{random_buffer, AES_128_GCM_TAG_LEN};
+use crate::outbound::vmess::protocol::{AES_128_GCM_TAG_LEN, random_buffer};
 
 mod aes;
 mod helper;

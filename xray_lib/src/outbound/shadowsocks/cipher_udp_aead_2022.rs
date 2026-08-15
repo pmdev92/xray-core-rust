@@ -14,8 +14,8 @@ use rand::Rng;
 use tls_parser::nom::AsBytes;
 
 use crate::outbound::shadowsocks::protocol::{
-    generate_iv, ss2022_password_to_key, ss2022_sub_key, to_io_error, xor, Cipher, DecodeResult,
-    PacketLen,
+    Cipher, DecodeResult, PacketLen, generate_iv, ss2022_password_to_key, ss2022_sub_key,
+    to_io_error, xor,
 };
 
 const MAX_PADDING_LEN: u16 = 900;

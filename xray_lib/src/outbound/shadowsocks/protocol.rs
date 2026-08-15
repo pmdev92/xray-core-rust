@@ -2,17 +2,17 @@ use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use md5::Digest;
 use sha2::Sha256;
 
 use crate::common::vec::vec_allocate;
+use crate::outbound::shadowsocks::ShadowSocksMethod;
 use crate::outbound::shadowsocks::cipher_aead::CipherAead;
 use crate::outbound::shadowsocks::cipher_none::CipherNone;
 use crate::outbound::shadowsocks::cipher_tcp_aead_2022::CipherTcpAead2022;
 use crate::outbound::shadowsocks::cipher_udp_aead_2022::CipherUdpAead2022;
-use crate::outbound::shadowsocks::ShadowSocksMethod;
 
 pub(crate) trait Cipher: Send + Sync {
     fn buffer_address_and_port(&mut self, address_and_port: &[u8]);
@@ -101,7 +101,13 @@ pub(crate) fn ss2022_password_to_key(
         match decoded {
             Ok(mut decoded) => {
                 if decoded.len() < len {
-                    return Err(io::Error::new(ErrorKind::InvalidData, format!("shadow socks 2022 outbound config error: password must have {} bytes len", len)));
+                    return Err(io::Error::new(
+                        ErrorKind::InvalidData,
+                        format!(
+                            "shadow socks 2022 outbound config error: password must have {} bytes len",
+                            len
+                        ),
+                    ));
                 }
                 decoded = if decoded.len() > len {
                     let mut hasher = Sha256::new();
@@ -113,12 +119,18 @@ pub(crate) fn ss2022_password_to_key(
                 result.push(decoded[..len].to_vec());
             }
             Err(_) => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "shadow socks 2022 outbound config error: unable to base 64 decode of shadowsocks password"))
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "shadow socks 2022 outbound config error: unable to base 64 decode of shadowsocks password",
+                ));
             }
         };
     }
     if result.len() == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "shadow socks 2022 outbound config error: unable to base 64 decode of shadowsocks password"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "shadow socks 2022 outbound config error: unable to base 64 decode of shadowsocks password",
+        ));
     }
 
     return Ok(result);

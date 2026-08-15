@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use log::warn;
-use quinn_proto::coding::Codec;
 use quinn_proto::VarInt;
+use quinn_proto::coding::Codec;
 use std::collections::VecDeque;
 use std::io;
 use std::io::Write;
