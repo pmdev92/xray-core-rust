@@ -1,0 +1,126 @@
+name: Xray Core Rust Build And Release CLI Mobile Libraries
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-lib-apple:
+    name: Build Apple Library
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          cargo install cbindgen
+          brew install llvm unzip protobuf
+
+      - name: Build Apple
+        run: |
+          ./xray_scripts/apple_build.sh
+
+      - name: Zip artifacts
+        run: |
+          mv build/LibXrayCoreRust.xcframework .
+          zip -r LibXrayCoreRust.xcframework.zip LibXrayCoreRust.xcframework
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibXrayCoreRust.xcframework.zip
+          path: LibXrayCoreRust.xcframework.zip
+
+  build-lib-android:
+    name: Build Android Library
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies and Android SDK
+        run: |
+          cargo install cbindgen
+
+          sudo apt update
+          sudo apt install -y make llvm-dev libclang-dev clang pkg-config unzip curl default-jdk build-essential libssl-dev
+
+          export ANDROID_HOME=/tmp/Android/sdk
+          export NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
+          export PATH=$ANDROID_HOME/cmdline-tools/bin:$PATH
+
+          cd /tmp/
+          curl -OL https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip
+          unzip commandlinetools-linux-6858069_latest.zip
+
+          mkdir -p $ANDROID_HOME
+          mv cmdline-tools $ANDROID_HOME
+
+          yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+          $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "ndk;28.2.13676358" "platforms;android-21"
+
+      - name: Build Android
+        run: |
+          export ANDROID_HOME=/tmp/Android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          export ANDROID_NDK_HOME=/tmp/Android/sdk/ndk/28.2.13676358
+          export ANDROID_NDK=/tmp/Android/sdk/ndk/28.2.13676358
+          export OPENSSL_DIR=$(pkg-config --variable=prefix openssl)
+
+          ./xray_scripts/android_build.sh all
+
+      - name: Zip artifacts
+        run: |
+          mv build/LibXrayCoreRust.aar .
+          zip -r LibXrayCoreRust.aar.zip LibXrayCoreRust.aar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibXrayCoreRust.aar.zip
+          path: LibXrayCoreRust.aar.zip
+
+  upload-mobile-release:
+    name: Upload mobile libraries to release
+    needs:
+      - build-lib-apple
+      - build-lib-android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download mobile artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare mobile release assets
+        run: |
+          mkdir -p release-assets
+          find dist -type f \( -name "LibXrayCoreRust.xcframework.zip" -o -name "LibXrayCoreRust.aar.zip" \) -exec cp {} release-assets/ \;
+          ls -lah release-assets
+
+      - name: Upload mobile assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
