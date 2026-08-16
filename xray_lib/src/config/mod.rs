@@ -7,8 +7,8 @@ pub mod config;
 pub mod log;
 pub mod stats;
 
-pub fn parse_config_json(config_json: String) -> Result<Config, io::Error> {
-    let result: serde_json::error::Result<Config> = serde_json::from_str(&config_json);
+pub fn parse_config_json(config_json: &str) -> Result<Config, io::Error> {
+    let result: serde_json::error::Result<Config> = serde_json::from_str(config_json);
     match result {
         Ok(config) => Ok(config),
         Err(err) => {

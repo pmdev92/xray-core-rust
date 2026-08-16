@@ -50,7 +50,7 @@ cargo build
 - ✅ SOCKS5
     - ✅ TCP
     - ✅ UDP
-    - 🚧 AUTH
+    - ✅ AUTH (user:password)
     - ✅ Chainable
 - ✅ ShadowSocks
     - ✅ All Encryption's
@@ -90,8 +90,7 @@ cargo build
     - ✅ XTLS
 - ✅ WebSocket
 - ✅ HTTP Upgrade
-- 🚧 XHTTP
-    - 🚧 H3
+- ✅ XHTTP
 - ✅ HTTP/2
 - ✅ GRPC
 

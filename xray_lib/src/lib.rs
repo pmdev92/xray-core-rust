@@ -55,7 +55,7 @@ pub fn start(
         dyn crate::core::context::android_platform::AndroidContext,
     >,
 ) -> bool {
-    let result = config::parse_config_json(config_json);
+    let result = config::parse_config_json(config_json.as_str());
     let config = match result {
         Ok(config) => config,
         Err(err) => {
