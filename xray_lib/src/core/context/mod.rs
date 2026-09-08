@@ -19,15 +19,19 @@ use std::sync::{Arc, MutexGuard};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, RwLock, RwLockReadGuard, mpsc};
 use tokio::time::Instant;
 
 use crate::common::udp::UdpConnection;
 #[cfg(target_os = "android")]
 use crate::core::context::android_platform::AndroidContext;
+use crate::core::dispatcher::DispatcherItem;
 use crate::core::io::{AsyncXrayTcpStream, AsyncXrayUdpStream};
+use crate::core::observatory::Observable;
+use crate::core::observatory::stats::ObserveStats;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use indexmap::IndexMap;
 use quinn::{
     AsyncUdpSocket, TokioRuntime,
     udp::{RecvMeta, Transmit},
@@ -43,6 +47,8 @@ use std::{
 use tokio::io::AsyncWriteExt;
 
 pub struct Context {
+    outbounds: Arc<RwLock<IndexMap<String, DispatcherItem>>>,
+    observers: Arc<IndexMap<String, Arc<Box<dyn Observable>>>>,
     dispatcher: Arc<Dispatcher>,
     #[cfg(target_os = "android")]
     platform: Box<dyn AndroidContext>,
@@ -51,10 +57,14 @@ pub struct Context {
 impl Context {
     pub fn new(
         dispatcher: Dispatcher,
+        outbounds: IndexMap<String, DispatcherItem>,
+        observations: IndexMap<String, Arc<Box<dyn Observable>>>,
         #[cfg(target_os = "android")] platform: Box<dyn AndroidContext>,
     ) -> Context {
         Self {
             dispatcher: Arc::new(dispatcher),
+            outbounds: Arc::new(RwLock::new(outbounds)),
+            observers: Arc::new(observations),
             #[cfg(target_os = "android")]
             platform: platform,
         }
@@ -64,13 +74,43 @@ impl Context {
         self.dispatcher.clone()
     }
 
-    #[cfg(target_os = "android")]
-    fn protect(&self, id: u64) {
-        self.platform.protect_fd(id)
+    pub async fn outbounds(&self) -> RwLockReadGuard<'_, IndexMap<String, DispatcherItem>> {
+        self.outbounds.read().await
+    }
+
+    pub async fn select_outbounds(&self, selector: &Vec<String>) -> Vec<String> {
+        let outbounds = self.outbounds.read().await;
+
+        let candidates: Vec<String> = outbounds
+            .keys()
+            .filter(|key| selector.iter().any(|selector| key.starts_with(selector)))
+            .cloned()
+            .collect();
+        candidates
+    }
+
+    pub fn get_observers(&self) -> Arc<IndexMap<String, Arc<Box<dyn Observable>>>> {
+        self.observers.clone()
+    }
+    pub async fn get_stats(
+        &self,
+        observation_tag: Option<String>,
+    ) -> Option<HashMap<String, ObserveStats>> {
+        let observation = match observation_tag {
+            Some(tag) => self.observers.get(&tag)?.clone(),
+            None => self.observers.get_index(0)?.1.clone(),
+        };
+        observation.get_stats().await
     }
 
     pub async fn destroy(&self) {
-        self.dispatcher.destroy().await;
+        let mut outbounds = self.outbounds.write().await;
+        *outbounds = IndexMap::new();
+    }
+
+    #[cfg(target_os = "android")]
+    fn protect(&self, id: u64) {
+        self.platform.protect_fd(id)
     }
 
     pub async fn connect_tokio_tcp(&self, address: SocketAddr) -> Result<TcpStream, Error> {
@@ -166,7 +206,7 @@ impl Context {
     ) -> Result<Box<dyn AsyncXrayTcpStream>, Error> {
         if let Some(detour) = &detour {
             let dispatcher = self.get_dispatcher();
-            let item = dispatcher.get_with_tag(detour.clone()).await;
+            let item = dispatcher.get_with_tag(self.clone(), detour.clone()).await;
             if let Some(item) = item {
                 return item
                     .outbound
@@ -186,7 +226,7 @@ impl Context {
     ) -> Result<Box<dyn AsyncXrayUdpStream>, Error> {
         if let Some(detour) = &detour {
             let dispatcher = self.get_dispatcher();
-            let item = dispatcher.get_with_tag(detour.clone()).await;
+            let item = dispatcher.get_with_tag(self.clone(), detour.clone()).await;
             if let Some(item) = item {
                 return item
                     .outbound

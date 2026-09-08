@@ -2,6 +2,12 @@ use crate::config::log::LogConfig;
 use crate::config::stats::StatsConfig;
 use crate::core::dispatcher::DispatcherItem;
 use crate::core::inbound::{InboundConfig, InboundTcp};
+use crate::core::observatory::Observable;
+use crate::core::observatory::brust::BrustObservation;
+use crate::core::observatory::brust::config::BrustObservationConfig;
+use crate::core::observatory::config::ObservationConfig;
+use crate::core::observatory::normal::NormalObservation;
+use crate::core::observatory::normal::config::NormalObservationConfig;
 use crate::core::outbound::{Outbound, OutboundConfig};
 use crate::core::router::config::RouterConfig;
 use crate::core::router::router::Router;
@@ -35,15 +41,19 @@ use crate::transport::http2::Http2Transport;
 use crate::transport::tcp::TcpTransport;
 use crate::transport::websocket::WebsocketTransport;
 use crate::transport::xhttp::XHttpTransport;
+use indexmap::IndexMap;
+use log::error;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
     pub log: Option<LogConfig>,
+    pub observations: Option<Vec<ObservationConfig>>,
     pub inbounds: Vec<InboundConfig>,
     pub outbounds: Vec<OutboundConfig>,
     pub router: Option<RouterConfig>,
@@ -102,6 +112,66 @@ impl Config {
         }
         Ok(inbounds)
     }
+
+    pub(crate) fn build_observation(
+        &self,
+    ) -> io::Result<IndexMap<String, Arc<Box<dyn Observable>>>> {
+        let mut observations: IndexMap<String, Arc<Box<dyn Observable>>> = IndexMap::new();
+        let config_observations = if let Some(observations) = &self.observations {
+            observations
+        } else {
+            return Ok(observations);
+        };
+        for observation_config in config_observations.iter() {
+            let instance: Box<dyn Observable> = match observation_config.method.as_str() {
+                "brust" => {
+                    let mut settings = BrustObservationConfig::default();
+                    if let Some(setting) = &observation_config.settings {
+                        let result: io::Result<BrustObservationConfig> =
+                            serde_json::from_str(setting.get()).map_err(|err| {
+                                io::Error::new(ErrorKind::InvalidData, err.to_string())
+                            });
+                        if let Ok(s) = result {
+                            settings = s;
+                        }
+                    }
+                    Box::new(Arc::new(BrustObservation::new(
+                        settings,
+                        observation_config.selector.clone(),
+                    )?))
+                }
+                "normal" => {
+                    let mut settings = NormalObservationConfig::default();
+                    if let Some(setting) = &observation_config.settings {
+                        let result: io::Result<NormalObservationConfig> =
+                            serde_json::from_str(setting.get()).map_err(|err| {
+                                io::Error::new(ErrorKind::InvalidData, err.to_string())
+                            });
+                        if let Ok(s) = result {
+                            settings = s;
+                        }
+                    }
+                    Box::new(Arc::new(NormalObservation::new(
+                        settings,
+                        observation_config.selector.clone(),
+                    )?))
+                }
+                _ => {
+                    error!("observation is not valid");
+                    return Err(io::Error::new(
+                        ErrorKind::InvalidData,
+                        "unsupported observation",
+                    ));
+                }
+            };
+            let tag = observation_config
+                .tag
+                .clone()
+                .unwrap_or(Uuid::new_v4().to_string());
+            observations.insert(tag, Arc::new(instance));
+        }
+        Ok(observations)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -117,8 +187,8 @@ impl Config {
         return serde_json::to_string_pretty(self);
     }
 
-    pub fn build_outbounds(&self) -> io::Result<Vec<DispatcherItem>> {
-        let mut outbounds: Vec<DispatcherItem> = vec![];
+    pub fn build_outbounds(&self) -> io::Result<IndexMap<String, DispatcherItem>> {
+        let mut outbounds: IndexMap<String, DispatcherItem> = IndexMap::new();
 
         for outbound_config in self.outbounds.iter() {
             let mut transport: Option<Box<dyn Transport>> = None;
@@ -394,11 +464,14 @@ impl Config {
                     panic!("outbound not valid")
                 }
             };
-            outbounds.push(DispatcherItem::new(
-                outbound_config.tag.clone(),
-                outbound_config.detour.clone(),
-                outbound_instance,
-            ));
+            let tag = outbound_config
+                .tag
+                .clone()
+                .unwrap_or(String::from(Uuid::new_v4().to_string()));
+            outbounds.insert(
+                tag.clone(),
+                DispatcherItem::new(tag, outbound_config.detour.clone(), outbound_instance),
+            );
         }
         return Ok(outbounds);
     }

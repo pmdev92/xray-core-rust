@@ -4,6 +4,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io;
 use std::sync::Arc;
 
+pub mod balancer;
 pub mod config;
 pub mod domain;
 mod group_conditions;

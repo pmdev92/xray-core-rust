@@ -3,6 +3,7 @@ void start_xray_logger(boolean is_all_packages, AndroidLogger logger);
 void start_xray_core(u32 id, string path, ProtectFd protector);
 void init_asset_path(string path);
 void shutdown_xray_core(u32 id);
+void request_check_xray_core(u32 id);
 void xray_version(Version version);
 };
 

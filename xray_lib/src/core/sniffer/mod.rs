@@ -40,11 +40,11 @@ impl Sniffer {
         target_location: Arc<NetLocation>,
         stream: &mut T,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, io::Error> {
-        let dispatcher = context.get_dispatcher();
+        let dispatcher = context.clone().get_dispatcher();
         if !dispatcher.have_any_matcher() {
             let route_location = RouteLocation::new(Network::Tcp, target_location.clone(), None);
             let item = dispatcher
-                .get_routed_outbound(session, route_location)
+                .get_routed_outbound(context.clone(), session, route_location)
                 .await;
             return match item {
                 Some(item) => {
@@ -94,7 +94,7 @@ impl Sniffer {
                 let route_location =
                     RouteLocation::new(Network::Tcp, target_location.clone(), sniff_result);
                 let item = dispatcher
-                    .get_routed_outbound(session, route_location)
+                    .get_routed_outbound(context.clone(), session, route_location)
                     .await;
                 match item {
                     Some(item) => {
@@ -133,11 +133,11 @@ impl Sniffer {
         context: Arc<Context>,
         target_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayTcpStream>, io::Error> {
-        let dispatcher = context.get_dispatcher();
+        let dispatcher = context.clone().get_dispatcher();
         if !dispatcher.have_any_matcher() {
             let route_location = RouteLocation::new(Network::Tcp, target_location.clone(), None);
             let item = dispatcher
-                .get_routed_outbound(session, route_location)
+                .get_routed_outbound(context.clone(), session, route_location)
                 .await;
             return match item {
                 Some(item) => {
@@ -165,7 +165,7 @@ impl Sniffer {
         }
         let route_location = RouteLocation::new(Network::Tcp, target_location.clone(), None);
         let item = dispatcher
-            .get_routed_outbound(session, route_location)
+            .get_routed_outbound(context.clone(), session, route_location)
             .await;
         match item {
             Some(item) => {
@@ -197,11 +197,11 @@ impl Sniffer {
         context: Arc<Context>,
         target_location: Arc<NetLocation>,
     ) -> Result<Box<dyn AsyncXrayUdpStream>, io::Error> {
-        let dispatcher = context.get_dispatcher();
+        let dispatcher = context.clone().get_dispatcher();
         if !dispatcher.have_any_matcher() {
             let route_location = RouteLocation::new(Network::Udp, target_location.clone(), None);
             let item = dispatcher
-                .get_routed_outbound(session, route_location)
+                .get_routed_outbound(context.clone(), session, route_location)
                 .await;
             return match item {
                 Some(item) => {
@@ -230,7 +230,7 @@ impl Sniffer {
 
         let route_location = RouteLocation::new(Network::Udp, target_location.clone(), None);
         let item = dispatcher
-            .get_routed_outbound(session, route_location)
+            .get_routed_outbound(context.clone(), session, route_location)
             .await;
         match item {
             Some(item) => {
@@ -262,11 +262,11 @@ impl Sniffer {
         target_location: Arc<NetLocation>,
         packet: &Vec<u8>,
     ) -> Result<Box<dyn AsyncXrayUdpStream>, io::Error> {
-        let dispatcher = context.get_dispatcher();
+        let dispatcher = context.clone().get_dispatcher();
         if !dispatcher.have_any_matcher() {
             let route_location = RouteLocation::new(Network::Udp, target_location.clone(), None);
             let item = dispatcher
-                .get_routed_outbound(session, route_location)
+                .get_routed_outbound(context.clone(), session, route_location)
                 .await;
             return match item {
                 Some(item) => {
@@ -311,7 +311,7 @@ impl Sniffer {
         let route_location =
             RouteLocation::new(Network::Udp, target_location.clone(), sniff_result);
         let item = dispatcher
-            .get_routed_outbound(session, route_location)
+            .get_routed_outbound(context.clone(), session, route_location)
             .await;
         match item {
             Some(item) => {

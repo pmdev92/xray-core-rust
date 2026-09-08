@@ -19,6 +19,7 @@ use log::{error, info, warn};
 use std::collections::HashMap;
 use std::io;
 use std::io::Error;
+use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -116,7 +117,7 @@ pub fn start(
         }
         context.destroy().await
     });
-    drop(runtime);
+    runtime.shutdown_background();
     true
 }
 
@@ -139,7 +140,26 @@ pub fn shutdown(id: u32) -> bool {
         Err(_) => false,
     }
 }
+pub fn request_check(id: u32) -> bool {
+    let mut runtime_manager = match RUNTIME_MANAGER.lock() {
+        Ok(runtime_manager) => runtime_manager,
+        Err(_) => {
+            return false;
+        }
+    };
 
+    let session = match runtime_manager.get(&id) {
+        Some(value) => value,
+        None => {
+            return false;
+        }
+    };
+    let observations = session.context.get_observers();
+    for observer in observations.iter() {
+        observer.1.request_check();
+    }
+    true
+}
 pub fn statistics(id: u32) -> Option<StatisticsResult> {
     let runtime_manager = match RUNTIME_MANAGER.lock() {
         Ok(runtime_manager) => runtime_manager,
@@ -163,7 +183,9 @@ pub fn statistics(id: u32) -> Option<StatisticsResult> {
 }
 
 async fn start_core(config: Config, context: Arc<Context>) {
+    info!("start: building inbounds");
     let inbounds = config.build_inbounds().unwrap();
+    info!("start: launching {} inbound(s)", inbounds.len());
     let mut results: Vec<JoinHandle<()>> = vec![];
     for inbound in inbounds {
         let clone = context.clone();
@@ -179,8 +201,26 @@ async fn start_core(config: Config, context: Arc<Context>) {
         });
         results.push(result);
     }
+    info!("start: building observations");
+    let observations = context.get_observers();
+    info!("start: launching {} observations(s)", observations.len());
+    for observation in observations.deref() {
+        let context_clone = context.clone();
+        let observation_clone = observation.1.clone();
+        let result = tokio::spawn(async move {
+            let result = observation_clone.start(context_clone).await;
+            match result {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("observation error: {}", e);
+                    return;
+                }
+            }
+        });
+        results.push(result);
+    }
+
     let _ = select_ok(results).await;
-    // let _ = result.await;
 }
 
 fn create_context(
@@ -238,7 +278,7 @@ fn create_context(
         }
     };
 
-    let dispatcher = Dispatcher::new(stats_enable, outbounds, router);
+    let dispatcher = Dispatcher::new(stats_enable, router);
 
     let dispatcher = match dispatcher {
         Ok(dispatcher) => dispatcher,
@@ -248,8 +288,19 @@ fn create_context(
         }
     };
 
+    let observations = config.build_observation();
+    let observations = match observations {
+        Ok(observations) => observations,
+        Err(err) => {
+            error!("build observations error: {}", err);
+            return None;
+        }
+    };
+
     Some(Arc::new(Context::new(
         dispatcher,
+        outbounds,
+        observations,
         #[cfg(target_os = "android")]
         platform,
     )))

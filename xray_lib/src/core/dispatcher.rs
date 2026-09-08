@@ -2,27 +2,24 @@ use std::io;
 use std::sync::Arc;
 
 use crate::common::net_location::NetLocation;
+use crate::core::context::Context;
 use crate::core::outbound::Outbound;
 use crate::core::router::RouteLocation;
 use crate::core::router::router::Router;
 use crate::core::session::Session;
 use crate::core::statistics_manager::StatisticsManager;
 use crate::outbound::stats::StatisticsOutbound;
-use log::{info, warn};
+use log::{info, trace, warn};
 use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct DispatcherItem {
-    pub tag: Option<String>,
+    pub tag: String,
     pub detour: Option<String>,
     pub outbound: Box<Arc<dyn Outbound>>,
 }
 impl DispatcherItem {
-    pub fn new(
-        tag: Option<String>,
-        detour: Option<String>,
-        outbound: Box<Arc<dyn Outbound>>,
-    ) -> Self {
+    pub fn new(tag: String, detour: Option<String>, outbound: Box<Arc<dyn Outbound>>) -> Self {
         Self {
             tag,
             detour,
@@ -31,39 +28,41 @@ impl DispatcherItem {
     }
 }
 pub struct Dispatcher {
-    outbounds: RwLock<Vec<DispatcherItem>>,
     router: Router,
     statistics_manager: Option<Arc<StatisticsManager>>,
 }
 
 impl Dispatcher {
-    pub fn new(
-        stats_enable: bool,
-        outbounds: Vec<DispatcherItem>,
-        router: Router,
-    ) -> Result<Dispatcher, io::Error> {
+    pub fn new(stats_enable: bool, router: Router) -> Result<Dispatcher, io::Error> {
         let mut statistics_manager = None;
         if stats_enable {
             statistics_manager = Some(StatisticsManager::new());
         }
         Ok(Self {
-            outbounds: RwLock::new(outbounds),
             router,
             statistics_manager,
         })
     }
     pub fn get_statistics_manager(&self) -> Option<Arc<StatisticsManager>> {
-        return self.statistics_manager.clone();
+        self.statistics_manager.clone()
     }
     pub fn have_any_matcher(&self) -> bool {
         self.router.have_any_matcher()
     }
     pub async fn get_routed_outbound(
         &self,
+        context: Arc<Context>,
         session: Session,
         route_location: Arc<RouteLocation>,
     ) -> Option<DispatcherItem> {
-        let tag = self.router.get_outbound_tag(route_location.clone());
+        trace!(
+            "dispatcher: routing session {} to {}",
+            session, route_location
+        );
+        let tag = self
+            .router
+            .get_outbound_tag(context.clone(), route_location.clone())
+            .await;
         match tag {
             None => {
                 info!(
@@ -79,78 +78,61 @@ impl Dispatcher {
                     route_location.clone(),
                     tag
                 );
-                for item in self.outbounds.read().await.iter() {
-                    let outbound_tag = &item.tag;
-                    match outbound_tag {
-                        None => {}
-                        Some(outbound_tag) => {
-                            if outbound_tag == &tag {
-                                return match &self.statistics_manager {
-                                    None => Some(item.clone()),
-                                    Some(statistics_manager) => {
-                                        let statistics_outbound = StatisticsOutbound::new(
-                                            item.clone(),
-                                            statistics_manager.clone(),
-                                        );
-                                        let statistics_outbound: Box<Arc<dyn Outbound>> =
-                                            Box::new(Arc::new(statistics_outbound));
-                                        Some(DispatcherItem::new(
-                                            item.tag.clone(),
-                                            item.detour.clone(),
-                                            statistics_outbound,
-                                        ))
-                                    }
-                                };
-                            }
+                let outbounds = context.outbounds().await;
+                let outbound = outbounds.get(&tag);
+                if let Some(outbound) = outbound {
+                    return match &self.statistics_manager {
+                        None => Some(outbound.clone()),
+                        Some(statistics_manager) => {
+                            let statistics_outbound = StatisticsOutbound::new(
+                                outbound.clone(),
+                                statistics_manager.clone(),
+                            );
+                            let statistics_outbound: Box<Arc<dyn Outbound>> =
+                                Box::new(Arc::new(statistics_outbound));
+                            Some(DispatcherItem::new(
+                                outbound.tag.clone(),
+                                outbound.detour.clone(),
+                                statistics_outbound,
+                            ))
                         }
-                    }
+                    };
                 }
+                drop(outbounds);
                 warn!(
                     "no outbound with tag '{}' found in outbounds use default outbound",
                     tag
-                )
+                );
             }
         }
-        let outbounds = self.outbounds.read().await;
-        if outbounds.len() > 0 {
+        let outbounds = context.outbounds().await;
+        let outbound_first = outbounds.get_index(0);
+        if let Some(outbound) = outbound_first {
             return match &self.statistics_manager {
-                None => Some(outbounds[0].clone()),
+                None => Some(outbound.1.clone()),
                 Some(statistics_manager) => {
                     let statistics_outbound =
-                        StatisticsOutbound::new(outbounds[0].clone(), statistics_manager.clone());
+                        StatisticsOutbound::new(outbound.1.clone(), statistics_manager.clone());
                     let statistics_outbound: Box<Arc<dyn Outbound>> =
                         Box::new(Arc::new(statistics_outbound));
                     Some(DispatcherItem::new(
-                        outbounds[0].tag.clone(),
-                        outbounds[0].detour.clone(),
+                        outbound.1.tag.clone(),
+                        outbound.1.detour.clone(),
                         statistics_outbound,
                     ))
                 }
             };
         }
-
-        return None;
+        None
     }
 
-    pub async fn get_with_tag(&self, tag: String) -> Option<DispatcherItem> {
-        let outbounds = self.outbounds.read().await;
-        for item in outbounds.iter() {
-            let outbound_tag = &item.tag;
-            match outbound_tag {
-                None => {}
-                Some(outbound_tag) => {
-                    if outbound_tag == &tag {
-                        return Some(item.clone());
-                    }
-                }
-            }
+    pub async fn get_with_tag(&self, context: Arc<Context>, tag: String) -> Option<DispatcherItem> {
+        let outbounds = context.outbounds().await;
+        let outbound = outbounds.get(&tag);
+        if let Some(outbound) = outbound {
+            return Some(outbound.clone());
         }
         warn!("no outbound with tag '{}' found in outbounds", tag);
-        return None;
-    }
-
-    pub async fn destroy(&self) {
-        let mut outbounds = self.outbounds.write().await;
-        *outbounds = vec![];
+        None
     }
 }

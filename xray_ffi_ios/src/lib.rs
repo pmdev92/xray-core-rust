@@ -6,6 +6,7 @@ mod version;
 
 use std::os::raw::c_char;
 use std::{env, ffi::CStr, thread};
+
 pub fn init_asset_path(path: String) {
     env::set_var("XRAY_ASSET_LOCATION", path)
 }
@@ -22,6 +23,11 @@ pub unsafe extern "C" fn start_xray_core(id: u32, config: *const c_char) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shutdown_xray_core(id: u32) {
     let _ = xray_lib::shutdown(id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn request_check_xray_core(id: u32) {
+    let _ = xray_lib::request_check(id);
 }
 
 #[repr(C)]

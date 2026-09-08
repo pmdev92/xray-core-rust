@@ -2,6 +2,7 @@ pub mod context;
 pub mod dispatcher;
 pub mod inbound;
 pub mod io;
+pub mod observatory;
 pub mod outbound;
 pub mod router;
 pub mod security;

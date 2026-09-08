@@ -11,6 +11,8 @@ uniffi::include_scaffolding!("xray");
 #[cfg(target_os = "android")]
 use crate::android::init_asset_path;
 #[cfg(target_os = "android")]
+use crate::android::request_check_xray_core;
+#[cfg(target_os = "android")]
 use crate::android::shutdown_xray_core;
 #[cfg(target_os = "android")]
 use crate::android::start_xray_core;

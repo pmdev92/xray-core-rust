@@ -78,6 +78,7 @@ hickory-resolver = "0.26.0-alpha.1"
 ml-kem = { version = "0.3", features = ["getrandom"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ctr = "0.9"
+indexmap = "2.2.0"
 
 [build-dependencies]
 protobuf-codegen = "3.4.0"

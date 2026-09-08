@@ -9,15 +9,16 @@ use crate::core::router::{Apply, RouteLocation};
 use std::sync::{Arc, Mutex};
 
 pub struct GroupConditions {
-    pub(crate) outbound_tag: String,
+    pub(crate) outbound_tag: Option<String>,
+    pub(crate) balancer_tag: Option<String>,
     matchers: Vec<Box<dyn Apply>>,
-    chach_matchers: Mutex<Vec<CacheMatchMatcher>>,
+    cache_matchers: Mutex<Vec<CacheMatchMatcher>>,
 }
 
 impl Apply for GroupConditions {
     fn apply(&self, route_location: Arc<RouteLocation>) -> bool {
         {
-            let not_found_matchers = self.chach_matchers.lock();
+            let not_found_matchers = self.cache_matchers.lock();
             match not_found_matchers {
                 Ok(mut not_found_matchers) => {
                     for not_found_matcher in not_found_matchers.iter() {
@@ -40,7 +41,7 @@ impl Apply for GroupConditions {
             }
         }
         {
-            let not_found_matchers = self.chach_matchers.lock();
+            let not_found_matchers = self.cache_matchers.lock();
             match not_found_matchers {
                 Ok(mut not_found_matchers) => {
                     not_found_matchers
@@ -57,9 +58,10 @@ impl Apply for GroupConditions {
 impl GroupConditions {
     pub fn new(rule: &RuleConfig) -> Self {
         let mut group_rules = Self {
-            outbound_tag: rule.outbound_tag.to_string(),
+            outbound_tag: rule.outbound_tag.clone(),
+            balancer_tag: rule.balancer_tag.clone(),
             matchers: Vec::new(),
-            chach_matchers: Mutex::new(vec![]),
+            cache_matchers: Mutex::new(vec![]),
         };
         match &rule.protocol {
             None => {}
@@ -80,10 +82,10 @@ impl GroupConditions {
 
         match &rule.port {
             None => {}
-            Some(rule) => {
+            Some(port_rules) => {
                 group_rules
                     .matchers
-                    .push(Box::new(PortMatcher::new(rule.clone())));
+                    .push(Box::new(PortMatcher::new(port_rules)));
             }
         }
 
@@ -106,9 +108,5 @@ impl GroupConditions {
         }
         //todo implement source(ip,port) network(udp,tcp) and other xray rules
         group_rules
-    }
-
-    pub fn get_outbound_tag(&self) -> String {
-        self.outbound_tag.clone()
     }
 }

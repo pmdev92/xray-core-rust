@@ -2,6 +2,7 @@ pub mod address;
 pub mod asset;
 pub mod buffer;
 pub mod constants;
+pub mod duration;
 pub mod geo;
 pub mod header;
 pub mod hex;

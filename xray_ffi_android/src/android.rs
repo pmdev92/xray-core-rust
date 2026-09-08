@@ -32,6 +32,9 @@ pub fn start_xray_core(id: u32, config: String, protector: Box<dyn ProtectFd>) {
 pub fn shutdown_xray_core(id: u32) {
     let _ = xray_lib::shutdown(id);
 }
+pub fn request_check_xray_core(id: u32) {
+    let _ = xray_lib::request_check(id);
+}
 
 pub trait ProtectFd: Send + Sync {
     fn protect(&self, id: u64) -> bool;
