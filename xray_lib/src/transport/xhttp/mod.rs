@@ -16,7 +16,7 @@ use crate::transport::xhttp::xmux::XmuxClientOpenUsage;
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use chrono::Utc;
-use log::warn;
+use log::{error, warn};
 use reqwest::Body;
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
@@ -271,7 +271,10 @@ impl XHttpTransportInner {
         if response.status != 200 {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("x-http unexpected status {}", response.status),
+                format!(
+                    "x-http unexpected open stream down status {}",
+                    response.status
+                ),
             ));
         }
 
@@ -385,7 +388,10 @@ impl XHttpTransportInner {
         if response.status != 200 {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("x-http unexpected status {}", response.status),
+                format!(
+                    "x-http open stream one unexpected status  {}",
+                    response.status
+                ),
             ));
         }
 
@@ -451,7 +457,7 @@ impl XHttpTransportInner {
                 if response.status != 200 {
                     return Err(Error::new(
                         ErrorKind::Other,
-                        format!("x-http unexpected status {}", response.status),
+                        format!("x-http post packet unexpected status {}", response.status),
                     ));
                 }
             }
@@ -475,7 +481,7 @@ impl XHttpTransportInner {
                 if response.status != 200 {
                     return Err(Error::new(
                         ErrorKind::Other,
-                        format!("x-http unexpected status {}", response.status),
+                        format!("x-http unexpected post packet status {}", response.status),
                     ));
                 }
             }
@@ -492,7 +498,7 @@ impl XHttpTransportInner {
                 if response.status != 200 {
                     return Err(Error::new(
                         ErrorKind::Other,
-                        format!("x-http unexpected status {}", response.status),
+                        format!("x-http unexpected post packet status {}", response.status),
                     ));
                 }
             }

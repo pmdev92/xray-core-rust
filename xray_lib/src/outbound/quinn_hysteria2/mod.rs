@@ -38,8 +38,8 @@ use crate::outbound::quinn_hysteria2::tcp_stream::Hysteria2TcpStream;
 use crate::outbound::quinn_hysteria2::udp_stream::Hysteria2UdpStream;
 use crate::outbound::quinn_hysteria2::varint::decode;
 use crate::outbound::quinn_tuic::protocol::packet::error;
+use crate::security::skip_cert_verifier::SkipCertVerifier;
 use crate::security::tls::config::TlsConfig;
-use crate::security::tls::verify::TlsNoCertVerifier;
 
 pub mod config;
 mod gecko;
@@ -116,7 +116,7 @@ impl HysteriaQuinnOutbound {
         } else {
             tls_client_config = ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(TlsNoCertVerifier {}))
+                .with_custom_certificate_verifier(Arc::new(SkipCertVerifier {}))
                 .with_no_client_auth();
         }
         tls_client_config.enable_early_data = true;

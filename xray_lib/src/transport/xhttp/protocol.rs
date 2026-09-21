@@ -66,6 +66,7 @@ impl Display for Mode {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct XhttpSettings {
     pub(crate) id: Uuid,
     pub(crate) x_mux_settings: XmuxSettings,

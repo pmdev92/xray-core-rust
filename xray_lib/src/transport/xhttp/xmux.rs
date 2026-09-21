@@ -64,7 +64,7 @@ impl XmuxClient {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct XmuxSettings {
     pub max_concurrency: i32,
     pub max_connections: i32,

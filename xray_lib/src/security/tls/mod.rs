@@ -1,23 +1,24 @@
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::{Security, XraySecurity};
+use crate::security::cert_verifier::CertVerifier;
+use crate::security::skip_cert_verifier::SkipCertVerifier;
 use crate::security::tls::config::TlsConfig;
 use crate::security::tls::tls::TlsSecurityStream;
 use crate::security::tls::xtls::TlsXtlsSecurityStream;
 use async_trait::async_trait;
 use bytes::BytesMut;
+use log::error;
 use std::io;
 use std::io::{BufRead, Error, Read, Write};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::RwLock;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use verify::TlsNoCertVerifier;
 
 pub mod config;
 
 pub mod tls;
 mod tls_new;
-pub mod verify;
 pub mod xtls;
 
 #[derive(Debug)]
@@ -33,24 +34,49 @@ impl TlsSecurity {
         let mut client_config: ClientConfig;
         let verify = config.verify.unwrap_or(true);
         let alpn_list = config.alpn.clone().unwrap_or_default();
+
         if verify {
-            let mut root_store = RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            client_config = ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth();
+            let has_pinned = config
+                .pinned_peer_cert_sha256
+                .as_ref()
+                .map_or(false, |v| !v.is_empty());
+            let has_name = config
+                .verify_peer_cert_by_name
+                .as_ref()
+                .map_or(false, |v| !v.is_empty());
+            if has_pinned || has_name {
+                let mut root_store = RootCertStore::empty();
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+                let verifier = CertVerifier::new(
+                    root_store,
+                    config.pinned_peer_cert_sha256.clone(),
+                    config.verify_peer_cert_by_name.clone(),
+                    config.server_name.clone(),
+                );
+                client_config = ClientConfig::builder()
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(verifier))
+                    .with_no_client_auth();
+            } else {
+                let mut root_store = RootCertStore::empty();
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+                client_config = ClientConfig::builder()
+                    .with_root_certificates(root_store)
+                    .with_no_client_auth();
+            }
         } else {
             client_config = ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(TlsNoCertVerifier {}))
+                .with_custom_certificate_verifier(Arc::new(SkipCertVerifier {}))
                 .with_no_client_auth();
         }
-        client_config.enable_early_data = true;
+        let is_early_data = config.is_early_data.unwrap_or(false);
+        client_config.enable_early_data = is_early_data;
         if !alpn_list.is_empty() {
             client_config.alpn_protocols = alpn_list.into_iter().map(|s| s.into_bytes()).collect();
         }
         let client_config = Arc::new(client_config);
-        let is_early_data = config.is_early_data.unwrap_or(false);
+
         let mut early_data_len = 0;
         if is_early_data {
             if early_data_len == 0 {
@@ -68,6 +94,7 @@ impl TlsSecurity {
             client_config: RwLock::new(client_config),
         }
     }
+
     pub async fn dial_xtls(
         &self,
         stream: Box<dyn AsyncXrayTcpStream + Send + Sync>,

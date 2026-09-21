@@ -2,7 +2,7 @@ use crate::common::net_location::NetLocation;
 use crate::core::context::Context;
 use crate::core::io::AsyncXrayTcpStream;
 use crate::core::security::Security;
-use crate::security::tls::verify::TlsNoCertVerifier;
+use crate::security::skip_cert_verifier::SkipCertVerifier;
 use crate::transport::xhttp::protocol::HttpVersion;
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
@@ -341,7 +341,7 @@ async fn open_http3_sender(
 
     let mut tls_config = ClientConfig::builder()
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(TlsNoCertVerifier {}))
+        .with_custom_certificate_verifier(Arc::new(SkipCertVerifier {}))
         .with_no_client_auth();
     tls_config.alpn_protocols = vec![b"h3".into()];
 

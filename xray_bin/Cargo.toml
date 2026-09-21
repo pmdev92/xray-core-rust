@@ -34,5 +34,6 @@ colored = { version = "3.0.0", features = [], optional = true }
 crashreport = { version = "1.0.1", optional = true }
 log = { version = "0.4.29", features = ["std"], optional = true }
 uniffi = { version = "0.30.0", features = ["cli"], optional = true }
+x509-parser = "0.18.1"
 
 

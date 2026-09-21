@@ -10,6 +10,7 @@ name = "xray_lib"
 path = "src/lib.rs"
 
 [dependencies]
+x509-parser = "0.18.1"
 aes = "0.8.4"
 aes-gcm = "0.10.3"
 bitvec = { version = "1.0.1", features = [] }
@@ -79,6 +80,7 @@ ml-kem = { version = "0.3", features = ["getrandom"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ctr = "0.9"
 indexmap = "2.2.0"
+rustls-pki-types = "1.13.2"
 
 [build-dependencies]
 protobuf-codegen = "3.4.0"

@@ -38,8 +38,8 @@ use crate::outbound::quinn_tuic::handler::{TuicHandlerInner, TuicOutboundHandler
 use crate::outbound::quinn_tuic::protocol::ToCommand;
 use crate::outbound::quinn_tuic::protocol::connect::Connect;
 use crate::outbound::quinn_tuic::tcp_stream::TuicTcpStream;
+use crate::security::skip_cert_verifier::SkipCertVerifier;
 use crate::security::tls::config::TlsConfig;
-use crate::security::tls::verify::TlsNoCertVerifier;
 use protocol::enums::{CongestionControl, UdpRelayMode};
 
 pub mod config;
@@ -84,7 +84,7 @@ impl TuicQuinnOutbound {
         } else {
             tls_client_config = ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(TlsNoCertVerifier {}))
+                .with_custom_certificate_verifier(Arc::new(SkipCertVerifier {}))
                 .with_no_client_auth();
         }
         if tuic_settings.tls_config.zero_rtt.unwrap_or(false) {

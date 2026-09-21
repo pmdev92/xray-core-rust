@@ -13,3 +13,18 @@ pub struct RealityConfig {
     pub early_data_len: Option<usize>,
     pub alpn: Option<Vec<String>>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VerifyMode {
+    False,
+    True,
+    PinnedPeerCertSha256,
+    VerifyPeerCertByName,
+}
+
+impl Default for VerifyMode {
+    fn default() -> Self {
+        VerifyMode::False
+    }
+}
