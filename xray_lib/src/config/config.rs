@@ -240,7 +240,7 @@ impl Config {
                         "xhttp" => {
                             transport = Some(Box::new(XHttpTransport::new(
                                 outbound_config.stream_settings.clone(),
-                                stream_setting.xhttp_settings.clone(),
+                                stream_setting.x_http_settings.clone(),
                                 security_setting,
                             )));
                         }
@@ -254,7 +254,7 @@ impl Config {
                         "httpupgrade" => {
                             transport = Some(Box::new(HttpUpgradeTransport::new(
                                 outbound_config.stream_settings.clone(),
-                                stream_setting.httpupgrade_settings.clone(),
+                                stream_setting.http_upgrade_settings.clone(),
                                 security_setting,
                             )));
                         }
