@@ -211,7 +211,7 @@ impl Config {
                                 ));
                             }
                             Some(tls_setting) => {
-                                security_setting = Some(Box::new(TlsSecurity::new(tls_setting)));
+                                security_setting = Some(Box::new(TlsSecurity::new(tls_setting)?));
                             }
                         },
                         "reality" => match &stream_setting.reality_settings {

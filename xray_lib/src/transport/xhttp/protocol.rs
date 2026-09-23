@@ -248,9 +248,10 @@ impl DownloadSettings {
                 let download_security: Arc<Option<Box<dyn Security>>> = match dl.security.as_str() {
                     "tls" => match &dl.tls_settings {
                         None => Arc::new(None),
-                        Some(tls) => {
-                            Arc::new(Some(Box::new(TlsSecurity::new(tls)) as Box<dyn Security>))
-                        }
+                        Some(tls) => match TlsSecurity::new(tls) {
+                            Ok(security) => Arc::new(Some(Box::new(security) as Box<dyn Security>)),
+                            Err(_) => Arc::new(None),
+                        },
                     },
                     "reality" => match &dl.reality_settings {
                         None => Arc::new(None),

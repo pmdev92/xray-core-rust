@@ -9,4 +9,5 @@ pub struct TlsConfig {
     pub alpn: Option<Vec<String>>,
     pub pinned_peer_cert_sha256: Option<Vec<String>>,
     pub verify_peer_cert_by_name: Option<Vec<String>>,
+    pub ech_config_list: Option<String>,
 }

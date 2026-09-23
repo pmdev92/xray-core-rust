@@ -3,9 +3,10 @@ use crate::common::vec::vec_allocate;
 use crate::core::context::Context;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use hickory_resolver::Resolver;
-use hickory_resolver::config::ResolverConfig;
-use hickory_resolver::proto::runtime::iocompat::AsyncIoTokioAsStd;
-use hickory_resolver::proto::runtime::{RuntimeProvider, TokioHandle, TokioTime};
+use hickory_resolver::config::{GOOGLE, ResolverConfig};
+use hickory_resolver::net::runtime::iocompat::AsyncIoTokioAsStd;
+use hickory_resolver::net::runtime::{RuntimeProvider, TokioHandle, TokioTime};
+
 use std::future::Future;
 use std::io::{ErrorKind, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
@@ -211,11 +212,15 @@ impl NetLocation {
                 }
 
                 let resolver = Resolver::builder_with_config(
-                    ResolverConfig::google(),
-                    MyTokioConnectionProvider::new(MyProvider::new(context.clone())),
+                    ResolverConfig::udp_and_tcp(&GOOGLE),
+                    MyProvider::new(context.clone()),
                 )
-                .build();
-                let response = resolver.lookup_ip(domain).await?;
+                .build()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+                let response = resolver
+                    .lookup_ip(domain)
+                    .await
+                    .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
                 let mut ip_v4: Option<Ipv4Addr> = None;
                 let mut ip_v6: Option<Ipv6Addr> = None;
                 if let Some(ip) = response.iter().next() {
@@ -293,7 +298,7 @@ impl NetLocation {
         buf.freeze()
     }
     pub fn to_socks_bytes(&self) -> Bytes {
-        let mut buf = bytes::BytesMut::new();
+        let mut buf = BytesMut::new();
         let address_bytes = self.address().to_socks_trojan_bytes();
         let _ = buf.put(address_bytes.as_slice());
         let port = self.port().to_be_bytes();
@@ -321,8 +326,6 @@ impl From<SocketAddr> for NetLocation {
     }
 }
 
-pub type MyTokioConnectionProvider = hickory_resolver::name_server::GenericConnector<MyProvider>;
-
 #[derive(Clone)]
 struct MyProvider {
     handle: TokioHandle,
@@ -349,7 +352,7 @@ impl RuntimeProvider for MyProvider {
     fn connect_tcp(
         &self,
         server_addr: SocketAddr,
-        bind_addr: Option<SocketAddr>,
+        _bind_addr: Option<SocketAddr>,
         wait_for: Option<Duration>,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>> {
         let context = self.context.clone();
@@ -360,7 +363,7 @@ impl RuntimeProvider for MyProvider {
                 Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
                 Ok(Err(e)) => Err(e),
                 Err(_) => Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
+                    ErrorKind::TimedOut,
                     format!("connection to {server_addr:?} timed out after {wait_for:?}"),
                 )),
             }
@@ -370,8 +373,8 @@ impl RuntimeProvider for MyProvider {
     fn bind_udp(
         &self,
         local_addr: SocketAddr,
-        server_addr: SocketAddr,
-    ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Udp>>>> {
+        _server_addr: SocketAddr,
+    ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
         let context = self.context.clone();
         Box::pin(async move {
             let udp_socket = context.bind_tokio_udp(local_addr).await?;
