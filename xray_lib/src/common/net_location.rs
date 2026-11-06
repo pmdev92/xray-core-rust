@@ -7,10 +7,13 @@ use hickory_resolver::config::{GOOGLE, ResolverConfig};
 use hickory_resolver::net::runtime::iocompat::AsyncIoTokioAsStd;
 use hickory_resolver::net::runtime::{RuntimeProvider, TokioHandle, TokioTime};
 
+use hickory_proto::rr::RecordType::{A, AAAA};
+use rand::seq::SliceRandom;
 use std::future::Future;
 use std::io::{ErrorKind, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, io};
@@ -174,7 +177,16 @@ impl NetLocation {
 
         Ok(Self { address, port })
     }
-
+    pub fn from_socket_address(socket_addr: SocketAddr) -> Self {
+        let address = match socket_addr.ip() {
+            IpAddr::V4(addr) => Address::Ipv4(addr),
+            IpAddr::V6(addr) => Address::Ipv6(addr),
+        };
+        Self {
+            address,
+            port: socket_addr.port(),
+        }
+    }
     pub fn from_ip_addr(ip: IpAddr, port: u16) -> Self {
         let address = match ip {
             IpAddr::V4(addr) => Address::Ipv4(addr),
@@ -204,52 +216,80 @@ impl NetLocation {
             Address::Ipv6(ref addr) => Ok(SocketAddr::new(IpAddr::V6(*addr), self.port)),
             Address::Ipv4(ref addr) => Ok(SocketAddr::new(IpAddr::V4(*addr), self.port)),
             Address::Hostname(ref domain) => {
-                if !is_android() {
-                    return format!("{}:{}", domain, self.port)
-                        .to_socket_addrs()?
-                        .next()
-                        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "dns lookup failed"));
-                }
-
-                let resolver = Resolver::builder_with_config(
-                    ResolverConfig::udp_and_tcp(&GOOGLE),
-                    MyProvider::new(context.clone()),
-                )
-                .build()
-                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
-                let response = resolver
-                    .lookup_ip(domain)
-                    .await
-                    .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
-                let mut ip_v4: Option<Ipv4Addr> = None;
-                let mut ip_v6: Option<Ipv6Addr> = None;
-                if let Some(ip) = response.iter().next() {
-                    match ip {
-                        IpAddr::V4(v4) => {
-                            if ip_v4.is_none() {
-                                ip_v4 = Some(v4.clone());
-                            }
-                        }
-                        IpAddr::V6(v6) => {
-                            if ip_v6.is_none() {
-                                ip_v6 = Some(v6.clone());
-                            }
-                        }
+                let dns_manager = context.get_dns_manager();
+                if let Some(dns_manager) = dns_manager {
+                    let result = dns_manager
+                        .resolve_ip(context.clone(), domain.clone(), vec![A, AAAA])
+                        .await;
+                    if let Some(result) = result {
+                        return Ok(SocketAddr::new(result, self.port));
                     }
                 }
-
-                if let Some(ip_v4) = ip_v4 {
-                    return Ok(SocketAddr::new(IpAddr::V4(ip_v4), self.port));
-                }
-                if let Some(ip_v6) = ip_v6 {
-                    return Ok(SocketAddr::new(IpAddr::V6(ip_v6), self.port));
-                }
-                Err(io::Error::new(
-                    ErrorKind::InvalidData,
-                    format!("cannot resolve ip address of {}", domain,),
-                ))
+                self.resolve_local(context.clone(), domain.clone()).await
             }
         }
+    }
+    pub async fn to_socket_addr_local(
+        &self,
+        context: Arc<Context>,
+    ) -> Result<SocketAddr, io::Error> {
+        match self.address {
+            Address::Ipv6(ref addr) => Ok(SocketAddr::new(IpAddr::V6(*addr), self.port)),
+            Address::Ipv4(ref addr) => Ok(SocketAddr::new(IpAddr::V4(*addr), self.port)),
+            Address::Hostname(ref domain) => {
+                self.resolve_local(context.clone(), domain.clone()).await
+            }
+        }
+    }
+    pub async fn resolve_local(
+        &self,
+        context: Arc<Context>,
+        domain: String,
+    ) -> Result<SocketAddr, io::Error> {
+        if !is_android() {
+            return format!("{}:{}", domain, self.port)
+                .to_socket_addrs()?
+                .next()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "dns lookup failed"));
+        }
+
+        let resolver = Resolver::builder_with_config(
+            ResolverConfig::udp_and_tcp(&GOOGLE),
+            MyProvider::new(context.clone()),
+        )
+        .build()
+        .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+        let response = resolver
+            .lookup_ip(domain.clone())
+            .await
+            .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+        let mut ip_v4: Option<Ipv4Addr> = None;
+        let mut ip_v6: Option<Ipv6Addr> = None;
+        if let Some(ip) = response.iter().next() {
+            match ip {
+                IpAddr::V4(v4) => {
+                    if ip_v4.is_none() {
+                        ip_v4 = Some(v4.clone());
+                    }
+                }
+                IpAddr::V6(v6) => {
+                    if ip_v6.is_none() {
+                        ip_v6 = Some(v6.clone());
+                    }
+                }
+            }
+        }
+
+        if let Some(ip_v4) = ip_v4 {
+            return Ok(SocketAddr::new(IpAddr::V4(ip_v4), self.port));
+        }
+        if let Some(ip_v6) = ip_v6 {
+            return Ok(SocketAddr::new(IpAddr::V6(ip_v6), self.port));
+        }
+        Err(io::Error::new(
+            ErrorKind::InvalidData,
+            format!("cannot resolve ip address of {}", domain),
+        ))
     }
 
     pub fn to_socket_addr_native(&self) -> Result<SocketAddr, io::Error> {

@@ -74,12 +74,12 @@ chrono = "0.4.42"
 form_urlencoded = "1.2.2"
 once_cell = "1.21.3"
 hickory-resolver = { version = "0.26.3", features = ["h3-aws-lc-rs", "https-aws-lc-rs", "tls-aws-lc-rs", "quic-aws-lc-rs"] }
+hickory-proto = "0.26.3"
 ml-kem = { version = "0.3", features = ["getrandom"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ctr = "0.9"
 indexmap = "2.2.0"
 rustls-pki-types = "1.13.2"
-
 
 [build-dependencies]
 protobuf-codegen = "3.4.0"

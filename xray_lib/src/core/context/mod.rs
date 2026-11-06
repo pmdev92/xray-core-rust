@@ -3,6 +3,7 @@ pub mod android_platform;
 use crate::common::net_location::NetLocation;
 use crate::config::config::MemoryConfig;
 use crate::core::dispatcher::Dispatcher;
+use crate::core::dns::DnsManager;
 use crate::core::streams::{XrayTcpStream, XrayUdpStream};
 use log::{debug, error};
 use quinn::default_runtime;
@@ -50,6 +51,7 @@ pub struct Context {
     outbounds: Arc<RwLock<IndexMap<String, DispatcherItem>>>,
     observers: Arc<IndexMap<String, Arc<Box<dyn Observable>>>>,
     dispatcher: Arc<Dispatcher>,
+    dns_manager: Option<Arc<DnsManager>>,
     #[cfg(target_os = "android")]
     platform: Box<dyn AndroidContext>,
 }
@@ -59,12 +61,14 @@ impl Context {
         dispatcher: Dispatcher,
         outbounds: IndexMap<String, DispatcherItem>,
         observations: IndexMap<String, Arc<Box<dyn Observable>>>,
+        dns_manager: Option<Arc<DnsManager>>,
         #[cfg(target_os = "android")] platform: Box<dyn AndroidContext>,
     ) -> Context {
         Self {
             dispatcher: Arc::new(dispatcher),
             outbounds: Arc::new(RwLock::new(outbounds)),
             observers: Arc::new(observations),
+            dns_manager,
             #[cfg(target_os = "android")]
             platform: platform,
         }
@@ -101,6 +105,10 @@ impl Context {
             None => self.observers.get_index(0)?.1.clone(),
         };
         observation.get_stats().await
+    }
+
+    pub fn get_dns_manager(&self) -> Option<Arc<DnsManager>> {
+        self.dns_manager.clone()
     }
 
     pub async fn destroy(&self) {

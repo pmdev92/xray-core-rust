@@ -8,12 +8,14 @@ use crate::core::context::Context;
 #[cfg(target_os = "android")]
 pub use crate::core::context::android_platform::AndroidContext;
 use crate::core::dispatcher::Dispatcher;
+use crate::core::dns::DnsManager;
 use crate::core::inbound::InboundTcp;
 use crate::core::sniffer::SnifferProtocol;
 use crate::core::statistics_manager::{StatisticsManager, StatisticsResult};
 use crate::inbound::socks::Socks5Inbound;
 use futures::executor::block_on;
 use futures_util::future::select_ok;
+use hickory_proto::rr::RecordType::A;
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use std::collections::HashMap;
@@ -183,6 +185,14 @@ pub fn statistics(id: u32) -> Option<StatisticsResult> {
 }
 
 async fn start_core(config: Config, context: Arc<Context>) {
+    // let domain = "digikala.com";
+    // let result = context
+    //     .get_dns_manager()
+    //     .unwrap()
+    //     .resolve_queries(context.clone(), domain.to_string(), vec![A])
+    //     .await;
+    // error!("dns resolved for {} is {:?}", domain, result);
+
     info!("start: building inbounds");
     let inbounds = config.build_inbounds().unwrap();
     info!("start: launching {} inbound(s)", inbounds.len());
@@ -297,10 +307,16 @@ fn create_context(
         }
     };
 
+    let dns_manager = config
+        .dns
+        .as_ref()
+        .map(|dns_config| Arc::new(DnsManager::new(dns_config.clone())));
+
     Some(Arc::new(Context::new(
         dispatcher,
         outbounds,
         observations,
+        dns_manager,
         #[cfg(target_os = "android")]
         platform,
     )))
