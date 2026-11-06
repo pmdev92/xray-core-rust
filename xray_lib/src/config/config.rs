@@ -1,6 +1,10 @@
 use crate::config::log::LogConfig;
 use crate::config::stats::StatsConfig;
 use crate::core::dispatcher::DispatcherItem;
+use crate::core::dns::DnsManager;
+use crate::core::dns::config::DnsConfig;
+use crate::core::dns::config::DnsProtocol;
+use crate::core::dns::config::DnsServer;
 use crate::core::inbound::{InboundConfig, InboundTcp};
 use crate::core::observatory::Observable;
 use crate::core::observatory::brust::BrustObservation;
@@ -19,6 +23,7 @@ use crate::inbound::socks::Socks5Inbound;
 use crate::inbound::socks::config::Socks5InboundSettings;
 use crate::outbound::block::BlockOutbound;
 use crate::outbound::direct::DirectOutbound;
+use crate::outbound::dns::DnsOutbound;
 use crate::outbound::quinn_hysteria2::HysteriaQuinnOutbound;
 use crate::outbound::quinn_hysteria2::config::HysteriaQuinnSettings;
 use crate::outbound::quinn_tuic::TuicQuinnOutbound;
@@ -58,6 +63,7 @@ pub struct Config {
     pub outbounds: Vec<OutboundConfig>,
     pub router: Option<RouterConfig>,
     pub stats: Option<StatsConfig>,
+    pub dns: Option<DnsConfig>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -184,7 +190,7 @@ pub struct ServerEndpoint<'a> {
 
 impl Config {
     pub fn to_json_string(&self) -> serde_json::Result<String> {
-        return serde_json::to_string_pretty(self);
+        serde_json::to_string_pretty(self)
     }
 
     pub fn build_outbounds(&self) -> io::Result<IndexMap<String, DispatcherItem>> {
@@ -324,6 +330,10 @@ impl Config {
                 }
                 "block" => {
                     let outbound: Box<Arc<dyn Outbound>> = Box::new(Arc::new(BlockOutbound::new()));
+                    outbound
+                }
+                "dns" => {
+                    let outbound: Box<Arc<dyn Outbound>> = Box::new(Arc::new(DnsOutbound::new()));
                     outbound
                 }
                 "vmess" => {
@@ -473,10 +483,10 @@ impl Config {
                 DispatcherItem::new(tag, outbound_config.detour.clone(), outbound_instance),
             );
         }
-        return Ok(outbounds);
+        Ok(outbounds)
     }
 
     pub fn build_router(&self) -> io::Result<Router> {
-        return Ok(Router::new(&self.router));
+        Ok(Router::new(&self.router))
     }
 }

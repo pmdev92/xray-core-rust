@@ -1,5 +1,6 @@
 pub mod block;
 pub mod direct;
+pub mod dns;
 pub mod quinn_hysteria2;
 pub mod quinn_tuic;
 pub mod shadowsocks;

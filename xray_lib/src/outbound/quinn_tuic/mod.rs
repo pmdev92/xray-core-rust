@@ -111,7 +111,7 @@ impl TuicQuinnOutbound {
             .trim_end_matches(|c: char| !c.is_numeric())
             .parse::<u64>()
             .unwrap_or(10);
-        if heartbeat <= 0 {
+        if heartbeat == 0 {
             heartbeat = 1;
         }
         if heartbeat > 100 {

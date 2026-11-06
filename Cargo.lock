@@ -4666,6 +4666,7 @@ dependencies = [
  "h2",
  "h3",
  "h3-quinn",
+ "hickory-proto",
  "hickory-resolver",
  "hkdf",
  "hmac",

@@ -1,5 +1,6 @@
 pub mod context;
 pub mod dispatcher;
+pub mod dns;
 pub mod inbound;
 pub mod io;
 pub mod observatory;
